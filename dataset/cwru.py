@@ -4,7 +4,7 @@ import numpy as np
 from dataset.base import BaseDataset, Sample
 
 class CWRUDataset(BaseDataset):    
-    def __init__(self, root_dir=None, source='FE', fault_filter=None, speed_filter=None, window_size=2048, window_stride=256, downsampling_factor=None):
+    def __init__(self, root_dir=None, source='FE', fault_filter=None, speed_filter=None, window_size=2048, window_stride=256, downsampling_factor=None, symetric_spectrum=True):
         """
         Args:
             source (str): Source des données, peut être 'DE', 'FE' ou 'BA'.
@@ -23,7 +23,8 @@ class CWRUDataset(BaseDataset):
                          speed_filter=speed_filter,
                          window_size=window_size, 
                          window_stride=window_stride,
-                         downsampling_factor=downsampling_factor
+                         downsampling_factor=downsampling_factor,
+                         symetric_spectrum=symetric_spectrum,
                          )
     
     def __delattr__(self, name):
@@ -45,7 +46,9 @@ class CWRUDataset(BaseDataset):
         return data
 
     def _collect_samples(self):
+
         for speed in os.listdir(self.root_dir):
+            
             full_speed_path = os.path.join(self.root_dir, speed)
             if os.path.isdir(full_speed_path):
                 for f in os.listdir(full_speed_path):

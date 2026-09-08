@@ -2,7 +2,7 @@ import torch, random
 import numpy as np
 import argparse
 
-from models.ssl.sap import SAPModel
+from models.ssl.ijepa import IJEPAModel
 from dataset import dataloader
 from training.pretrain import train, evaluate
 from types import SimpleNamespace
@@ -10,10 +10,10 @@ from models.backbone.registry import get_backbone
 
 def main(args):
     """
-    Pretrain SAP model for self-supervised learning on time series data.
+    Pretrain IJEPA model for self-supervised learning on time series data.
     Args:
        args (argparse): Arguments for the
-          pretrain SAP model.
+          pretrain IJEPA model.
              - dataset (str): Dataset to pretrain.
              - window_size (int): Size of time serie window.
              - window_stride (int): Stride of time serie window.
@@ -24,13 +24,13 @@ def main(args):
              - weight_decay (float): Weight decay for Adam
              - epochs (int): Number of epochs to train
     """
+
     # Set dataloader arguments
     args_dataloader = SimpleNamespace(
         name=args.pretrain_dataset,
         window_size=args.window_size,
-        window_stride=args.window_stride,
+        window_stride=args.window_stride,   
         batch_size=args.batch_size,
-        downsampling_factor=args.downsampling_factor
         )
     
     # Set backbone arguments
@@ -39,8 +39,10 @@ def main(args):
     )
     # Set ssl arguments
     args_ssl = SimpleNamespace(
-        method="sap",
-        downsampling_factor=args.downsampling_factor,
+        method="ijepa",
+        enc_mask_ratio=args.enc_mask_ratio,
+        pred_mask_ratio=args.pred_mask_ratio,
+        momentum=args.momentum,
     )
 
     # Set training arguments
@@ -56,9 +58,9 @@ def main(args):
     random.seed(0)
 
     # Set device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   
 
-    # Prepare data loaders
+    # Prepare dataloader
     train_loader, valid_loader, test_loader = dataloader.get_heterogeneous_split_dataloaders(args_dataloader)
 
     # Initialize backbone
@@ -68,14 +70,14 @@ def main(args):
     # Compute min-max from X_raw train dataloader
     stats = dataloader.compute_stats_from_dataloader(train_loader)
     backbone._loads_stats(stats)
-    
-    # Initialize ssl method
-    model = SAPModel(backbone, args_ssl)
 
-    # Define optimizer and scheduler    
-    optimizer = torch.optim.AdamW(model.parameters(), lr= args_training .learning_rate, weight_decay=args_training.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args_training .epochs, eta_min=1e-6)
-    
+    # Initialize IJEPA model
+    model = IJEPAModel(backbone, args_ssl).to(device)
+
+    # Define optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=args_training.learning_rate, weight_decay=args_training.weight_decay)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+
     # Start training
     train(
         model=model,
@@ -93,36 +95,23 @@ def main(args):
     )
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser(description="Pretrain SAP Model")
+    parser = argparse.ArgumentParser(description="Pretrain IJEPA model for self-supervised learning on time series data.")
     
-    # # Dataloader
-    # parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI'], help='Name of the dataset to use for pretraining')
-    
-    # parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
-    # parser.add_argument('--window_size', type=int, default=2048, help='Window size for data segments')
-    # parser.add_argument('--window_stride', type=int, default=256, help='Stride for windowing data segments')
+    # Dataloader
+    parser.add_argument("--pretrain_dataset", type=str, default="CWRU", help="Dataset to pretrain.")
+    parser.add_argument("--window_size", type=int, default=2048, help="Size of time series window.")
+    parser.add_argument("--window_stride", type=int, default=512, help="Stride of time series window.")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for dataloader.")
 
-    # # Training
-    # parser.add_argument('--learning_rate', type=float, default=0.0003695, help='Learning rate for optimizer')
-    # parser.add_argument('--weight_decay', type=float, default=1.1133e-5, help='Weight decay for optimizer')
-    # parser.add_argument('--epochs', type=int, required=True, help='Number of training epochs')
+    # Training
+    parser.add_argument("--learning_rate", type=float, default=1e-3, help="Learning rate for optimizer.")
+    parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay for optimizer.")
+    parser.add_argument("--epochs", type=int, default=100, help="Number of epochs to train.")
+        
+    # IJEPA specific
+    parser.add_argument("--enc_mask_ratio", type=float, default=0.5, help="Masking ratio for encoder in IJEPA.")
+    parser.add_argument("--pred_mask_ratio", type=float, default=0.5, help="Masking ratio for predictor in IJEPA.")
+    parser.add_argument("--momentum", type=float, default=0.97, help="Momentum for target encoder in IJEPA.")
 
-    # # SAP specific
-    # parser.add_argument('--downsampling_factor', type=float, required=True, help='Downsampling factor')
-    
-    # args = parser.parse_args()
-
-    # Debugging arguments
-    args = SimpleNamespace(
-        pretrain_dataset="CWRU",
-        downstream_dataset="CWRU",
-        batch_size=64,
-        window_size=2048,
-        window_stride=256,
-        learning_rate=0.0003695,
-        weight_decay=1.1133e-5,
-        epochs=50,
-        downsampling_factor=6,
-    )
-
+    args = parser.parse_args()
     main(args)

@@ -9,6 +9,12 @@ from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime
 
+from models.ssl.ijepa import IJEPAModel
+from models.ssl.mae import MAEModel
+from models.ssl.sap import SAPModel
+from models.ssl.ts2vec import TS2VecModel
+from models.ssl.tstcc import TSTCCModel
+
 # Utilities for pretraining
 def create_run_dir(method:str, dataset:str)->Path:
     """
@@ -110,17 +116,53 @@ def save_model_checkpoint(run_dir:Path, model:nn.Module, name:str="model.pt"):
         # Save backbone arguments (hyperparameters)
         if hasattr(model.backbone, '_get_arguments'):
             checkpoint['backbone_args'] = vars(model.backbone._get_arguments())
+
         # Save backbone stats
         if hasattr(model.backbone, 'stats'):
             checkpoint['backbone_stats'] = model.backbone.stats
+
+        # Save backbone domain if it exists
+        if hasattr(model.backbone, 'domain'):
+            checkpoint['backbone_domain'] = model.backbone.domain
+
+        # Save backbone normalization if it exists
+        if hasattr(model.backbone, 'normalization'):
+            checkpoint['backbone_normalization'] = model.backbone.normalization
     
-    # Save SSL method metadata (e.g., mask_ratio for MAE)
-    if hasattr(model, 'mask_ratio'):
-        checkpoint['mask_ratio'] = model.mask_ratio
+    # Save additional SSL parameters if MAE model
+    if isinstance(model, MAEModel):
+        if hasattr(model, 'mask_ratio'):
+            checkpoint['mask_ratio'] = model.mask_ratio
     
     #  Save downsampling factor if it exists
-    if hasattr(model, 'downsample_factor'):
-        checkpoint['downsample_factor'] = model.downsample_factor
+    if isinstance(model, SAPModel):
+        if hasattr(model, 'downsample_factor'):
+            checkpoint['downsample_factor'] = model.downsample_factor
+
+    # Save additional SSL parameters if IJEPA model
+    if isinstance(model, IJEPAModel):
+        if hasattr(model, 'enc_mask_ratio'):
+            checkpoint['enc_mask_ratio'] = model.enc_mask_ratio
+        if hasattr(model, 'pred_mask_ratio'):
+            checkpoint['pred_mask_ratio'] = model.pred_mask_ratio
+        if hasattr(model, 'momentum'):
+            checkpoint['momentum'] = model.momentum
+    
+    # Save additional SSL parameters if TS2Vec model
+    if isinstance(model, TS2VecModel):
+        if hasattr(model, 'temperature'):
+            checkpoint['temperature'] = model.temperature
+        if hasattr(model, 'use_cosine_similarity'):
+            checkpoint['use_cosine_similarity'] = model.use_cosine_similarity
+        if hasattr(model, 'temporal_unit'):
+            checkpoint['temporal_unit'] = model.temporal_unit
+
+    # Save additional SSL parameters if TS-TCC model
+    if isinstance(model, TSTCCModel):
+        if hasattr(model, 'temperature'):
+            checkpoint['temperature'] = model.temperature
+        if hasattr(model, 'timesteps'):
+            checkpoint['timesteps'] = model.timesteps
     
     torch.save(checkpoint, checkpoint_path / name)
 
@@ -133,23 +175,68 @@ def load_model_checkpoint(model:nn.Module, checkpoint_path:Path)->nn.Module:
     Returns:
         nn.Module: The model with loaded weights and stats.
     """
-    checkpoint_path = os.path.join(checkpoint_path,'checkpoints','best.pt') if isinstance(checkpoint_path, str) else checkpoint_path
+    checkpoint_path = os.path.join(checkpoint_path,'checkpoints','last.pt') if isinstance(checkpoint_path, str) else checkpoint_path
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     
     # Load model state
     if isinstance(checkpoint, dict) and 'model_state' in checkpoint:
-        model.load_state_dict(checkpoint['model_state'])
+        # Load with strict=False to handle missing keys (e.g., mask_token added in newer versions)
+        incompatible_keys = model.load_state_dict(checkpoint['model_state'], strict=False)
+        if incompatible_keys.missing_keys:
+            print(f"Warning: Missing keys in checkpoint: {incompatible_keys.missing_keys}")
+        if incompatible_keys.unexpected_keys:
+            print(f"Warning: Unexpected keys in checkpoint: {incompatible_keys.unexpected_keys}")
+        
         # Restore backbone metadata if available
         if hasattr(model, 'backbone'):
             if 'backbone_stats' in checkpoint:
                 model.backbone._loads_stats(checkpoint['backbone_stats'])
-            if 'mask_ratio' in checkpoint:
-                model.mask_ratio = checkpoint['mask_ratio']
-            if 'downsample_factor' in checkpoint:
-                model.downsample_factor = checkpoint['downsample_factor']
+            
+            if 'backbone_domain' in checkpoint:
+                model.backbone.domain = checkpoint['backbone_domain']
+            
+            if 'backbone_normalization' in checkpoint:
+                model.backbone.normalization = checkpoint['backbone_normalization']
+
+            # Restore SSL method metadata if MAE model
+            if isinstance(model, MAEModel):
+                if 'mask_ratio' in checkpoint:
+                    model.mask_ratio = checkpoint['mask_ratio']
+
+            # Restore SSL method metadata if SAP model
+            if isinstance(model, SAPModel):
+                if 'downsample_factor' in checkpoint:
+                    model.downsample_factor = checkpoint['downsample_factor']
+
+            # Restore SSL method metadata if IJEPA model
+            if isinstance(model, IJEPAModel):
+                if 'enc_mask_ratio' in checkpoint:
+                    model.enc_mask_ratio = checkpoint['enc_mask_ratio']
+                if 'pred_mask_ratio' in checkpoint:
+                    model.pred_mask_ratio = checkpoint['pred_mask_ratio']
+                if 'momentum' in checkpoint:
+                    model.momentum = checkpoint['momentum']
+                    
+            # Restore SSL method metadata if TS2Vec model
+            elif isinstance(model, TS2VecModel):
+                if 'temperature' in checkpoint:
+                    model.temperature = checkpoint['temperature']
+                if 'use_cosine_similarity' in checkpoint:
+                    model.use_cosine_similarity = checkpoint['use_cosine_similarity']
+                if 'temporal_unit' in checkpoint:
+                    model.temporal_unit = checkpoint['temporal_unit']
+
+            # Restore SSL method metadata if TS-TCC model
+            elif isinstance(model, TSTCCModel):
+                if 'temperature' in checkpoint:
+                    model.temperature = checkpoint['temperature']
+                if 'timesteps' in checkpoint:
+                    model.timesteps = checkpoint['timesteps']
     else:
         # Backward compatibility: if checkpoint is just state_dict
-        model.load_state_dict(checkpoint)
+        incompatible_keys = model.load_state_dict(checkpoint, strict=False)
+        if incompatible_keys.missing_keys:
+            print(f"Warning: Missing keys in checkpoint: {incompatible_keys.missing_keys}")
     
     return model
 
@@ -218,6 +305,44 @@ def evaluate(run_dir:Path,
     plt.grid()
     plt.savefig(run_dir / "log" / "reconstruction.png")
 
+def save_global_metrics(run_dir:Path, best_valid_loss:float, last_valid_loss:float, best_train_loss:float, last_train_loss:float):
+    """
+    Save global metrics (best and last losses) to a JSON file.
+    Args:
+        run_dir (Path): Directory to save the metrics.
+        best_valid_loss (float): Best validation loss achieved during training.
+        last_valid_loss (float): Validation loss at the end of training.
+        best_train_loss (float): Best training loss achieved during training.
+        last_train_loss (float): Training loss at the end of training.
+    """
+    # Get the method and dataset from the run directory structure
+    ht = run_dir.parts
+    if len(ht) < 4:
+        print("Unexpected run directory structure. Cannot extract method and dataset.")
+        return
+
+    
+    # Create results dictionary with method, dataset, timestamp, and metrics
+    results_dict = {
+        "method":ht[-3],
+        "dataset":ht[-2],
+        "timestamp":ht[-1],
+        "best_valid_loss": best_valid_loss,
+        "last_valid_loss": last_valid_loss,
+        "best_train_loss": best_train_loss,
+        "last_train_loss": last_train_loss,
+    }
+    
+    # Save to CSV file
+    filepath = Path("results/pretrain/pretrain_metrics.csv")
+    file_exists = os.path.isfile(filepath)
+    
+    with open(filepath, mode="a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=results_dict.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(results_dict)
+
 # Core pretraining loop
 def train(
         model:nn.Module,
@@ -232,7 +357,7 @@ def train(
         args_ssl:dict,
         args_training:dict,
         scheduler:None,
-        evaluation:bool=True,
+        evaluation:bool=False,
         ):
     """
     Pretraining loop for self-supervised learning models.
@@ -260,6 +385,12 @@ def train(
     model.to(device)
     best_valid_loss = float('inf')
 
+    last_valid_loss = float('inf')
+    last_train_loss = float('inf')
+
+    best_valid_loss = float('inf')
+    best_train_loss = float('inf')
+
     for epoch in range(1, epochs + 1):
         # Training phase
         model.train()
@@ -277,8 +408,15 @@ def train(
             
             train_loss += loss.item()
 
+            # For IJEPA, update the target encoder with momentum after each batch
+            if isinstance(model, IJEPAModel):
+                # Update target encoder with momentum
+                model.update_target_encoder()
+
         train_loss /= len(train_loader)
-        # train_loss /= len(train_loader.dataset)
+
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
 
         # Validation phase
         model.eval()
@@ -293,7 +431,9 @@ def train(
                 valid_loss += loss.item()
 
         valid_loss /= len(valid_loader)
-        # valid_loss /= len(valid_loader.dataset)
+
+        if valid_loss < best_valid_loss:
+            best_valid_loss = valid_loss
 
         if scheduler:
             scheduler.step()
@@ -307,6 +447,9 @@ def train(
         if run_dir and (epoch == 1 or valid_loss < best_valid_loss):
             best_valid_loss = valid_loss
             save_model_checkpoint(run_dir, model, name="best.pt")
+
+    last_valid_loss = valid_loss
+    last_train_loss = train_loss
     
     # Save final model
     if run_dir:
@@ -315,6 +458,9 @@ def train(
         plot_metrics(run_dir) # Plot training metrics
 
     print("Training complete.")
+
+    # Save global metrics to CSV
+    save_global_metrics(run_dir, best_valid_loss, last_valid_loss, best_train_loss, last_train_loss)
 
     # Evaluate on test set
     if evaluation:

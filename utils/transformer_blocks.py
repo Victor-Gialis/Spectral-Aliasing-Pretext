@@ -120,3 +120,16 @@ class PositionalEncoding(nn.Module):
         if n > self.max_seq_len:
             raise ValueError(f"n ({n}) dépasse max_seq_len ({self.max_seq_len})")
         return x + self.pos_encoding[:, :n, :]
+
+class Predictor(nn.Module):
+    def __init__(self, hidden_dim: int, predictor_hidden_dim: int):
+        super().__init__()
+        self.predictor = nn.Sequential(
+            nn.Linear(hidden_dim, predictor_hidden_dim),
+            nn.BatchNorm1d(predictor_hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(predictor_hidden_dim, hidden_dim)
+        )
+
+    def forward(self, x):
+        return self.predictor(x)

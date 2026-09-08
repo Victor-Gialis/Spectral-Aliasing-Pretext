@@ -29,7 +29,8 @@ class BaseDataset(Dataset):
                  speed_filter=None, 
                  window_size=None, 
                  window_stride=None, 
-                 downsampling_factor=None):
+                 downsampling_factor=None,
+                 symetric_spectrum=True):
         """
         Args:
             root_dir (str): Répertoire racine contenant les données.
@@ -37,7 +38,8 @@ class BaseDataset(Dataset):
             speed_filter (list, optional): Liste des vitesses à inclure. Si None, toutes les vitesses sont incluses.
             window_size (int, optional): Taille de la fenêtre pour découper les samples. Si None, pas de découpage.
             window_stride (int, optional): Pas de la fenêtre pour découper les samples. Si None, pas de découpage.
-            downsampling_factor (int, optional): Facteur de sous échantillonnage. Si None, pas de sous échantillon
+            downsampling_factor (int, optional): Facteur de sous échantillonnage. Si None, pas de sous échantillonnage.
+            symetric_spectrum (bool, optional): Indique si le spectre doit être symétrique. Par défaut True.
         """
         assert os.path.isdir(root_dir), f"Le répertoire {root_dir} n'existe pas ou n'est pas un répertoire."
         assert window_size is None or isinstance(window_size, int) and window_size > 0, "window_size doit être un entier positif."
@@ -49,6 +51,7 @@ class BaseDataset(Dataset):
         self.window_size = window_size
         self.window_stride = window_stride
         self.downsampling_factor = downsampling_factor # Downsampling factor
+        self.symetric_spectrum = symetric_spectrum
 
         self.samples = []
         self.windows = []
@@ -133,22 +136,28 @@ class BaseDataset(Dataset):
 
         # Frequency domain transformation
         X_raw = spectrum.reduced_magnitude_spectrum(x_raw)
+
+        # Downsampling is None = random factor for each sample
+        if self.downsampling_factor is None or self.downsampling_factor == "None":
+            self.downsampling_factor = np.random.randint(1, 10) # Random downsampling factor between 1 and 10
         
-        if self.downsampling_factor is not None :
-            x_fold = undersampling.undersampling_time_serie(x_raw, factor=self.downsampling_factor)
-            X_fold = spectrum.reduced_magnitude_spectrum(x_fold)
+        elif type(self.downsampling_factor) == str :
+            self.downsampling_factor = int(self.downsampling_factor)
+
+        x_fold = undersampling.undersampling_time_serie(x_raw, factor=self.downsampling_factor)
+        X_fold = spectrum.reduced_magnitude_spectrum(x_fold)
+
+        if self.symetric_spectrum:
             X_fold = spectrum.symetric_spectrum_preparation(X_fold, factor=self.downsampling_factor, target_size=X_raw.shape[-1])
 
-        else :
-            X_fold = None
+        # else :
+        #     X_fold = None
 
-        return {'X_raw':X_raw, 
-                'X_folded':X_fold, 
-                'y_label':y_label, 
-                'metadata':metadata,
-                'filepath': filepath}
+        return {'x_raw':x_raw, # Raw time series
+                'x_folded':x_fold, # Downsampled time series
+                'X_raw':X_raw, # Magnitude spectrum of the original time series
+                'X_folded':X_fold, # Magnitude spectrum of the downsampled time series
+                'y_label':y_label, # Label associated with the sample
+                'metadata':metadata, # Metadata associated with the sample
+                'filepath': filepath} # Filepath of the sample
 
-# import matplotlib.pyplot as plt
-# plt.plot(X_raw.numpy())
-# plt.plot(X_fold.numpy())
-# plt.savefig("test.png")

@@ -9,6 +9,7 @@ import seaborn as sns
 from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime
+from models.backbone.vit1d import ViT1DEncoder
 from models.ssl.mae import MAEModel
 
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
@@ -40,8 +41,9 @@ def create_run_dir(base_dir="results/downstream", args:object=None):
         pretrain_dataset = "None"
 
     # create directory structure
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dir = f"{pretrain_dataset}_to_{downstream_dataset}_backbone_{backbone_init}_head_{head_type}_finetune_{finetune}"
-    run = os.path.join(split_dir, dir)
+    run = os.path.join(split_dir, dir, timestamp)
     os.makedirs(run, exist_ok=True)
 
     data_ratio = args.data_ratio
@@ -51,6 +53,10 @@ def create_run_dir(base_dir="results/downstream", args:object=None):
     dir_name = f"data_ratio_{data_ratio}_epochs_{epochs}_seed_{seed}"
     run_dir = os.path.join(run, dir_name)
     os.makedirs(run_dir, exist_ok=True)
+
+    os.makedirs(os.path.join(run_dir, "checkpoint"), exist_ok=True)
+    os.makedirs(os.path.join(run_dir, "log"), exist_ok=True)
+    os.makedirs(os.path.join(run_dir, "attention_visualizations"), exist_ok=True)
 
     return run_dir
 
@@ -68,7 +74,7 @@ def save_model_checkpoint(model, run_dir, name="model_checkpoint.pth"):
     :param run_dir: Directory to save the checkpoint
     :param name: Name of the checkpoint file
     """
-    checkpoint_path = os.path.join(run_dir, name)
+    checkpoint_path = os.path.join(run_dir, "checkpoint", name)
     
     # Create checkpoint dictionary with model weights
     checkpoint = {
@@ -130,7 +136,7 @@ def plot_metrics(train_losses, valid_losses, run_dir):
     plt.title("Training and Validation Loss over Epochs")
     plt.legend()
     plt.grid()
-    plt.savefig(os.path.join(run_dir, "loss_curve.png"))
+    plt.savefig(os.path.join(run_dir, "log","loss_curve.png"))
     plt.close()
 
 def plot_test_metrics_over_epochs(all_test_metrics, run_dir, task="classification"):
@@ -194,7 +200,7 @@ def plot_test_metrics_over_epochs(all_test_metrics, run_dir, task="classificatio
         plt.savefig(os.path.join(run_dir, "test_metrics_over_epochs.png"), dpi=300, bbox_inches='tight')
         plt.close()
 
-def plot_attention_spectra(run_dir, model, test_loader, device, task="classification"):
+def plot_attention_spectra(run_dir, model, test_loader, device, task="classification", nyquist_freq=6000):
     """
     Plot average spectrum for each class with patches colored by attention scores.
     
@@ -207,24 +213,42 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
     if task != "classification":
         return
     
+    if not isinstance(model.backbone, ViT1DEncoder):
+        return
+    
     model.eval()
     class_spectra = {}
     class_attention_scores = {}
+    df_top_attention = list()
+
+    # Create run_dir if not exist
+    os.makedirs(run_dir, exist_ok=True)
     
     with torch.no_grad():
         for batch in tqdm(test_loader, desc="Extracting Attention Scores", leave=False):
             inputs = move_batch_to_device(batch, device)
+
+            # Get input data            
+            if model.backbone.domain == "time":
+                X_raw = inputs['x_raw']
             
-            # Get input spectra
-            X_raw = inputs['X_raw']  # (batch, n_time_steps)
-            
-            # Normalize (same as in downstream model)
-            x_norm = normalization.global_z_log_normalization(x=X_raw, stats=model.backbone.stats)
+            elif model.backbone.domain == "frequency":
+                X_raw = inputs['X_raw']
+
+            else:
+                raise ValueError(f"Unsupported backbone domain: {model.backbone.domain}")
+        
+            # If stats normalise
+            if hasattr(model.backbone, 'stats') and model.backbone.stats is not None:
+                # Normalize (same as in downstream model)
+                x_norm = normalization.global_z_log_normalization(x=X_raw, stats=model.backbone.stats)
+            else:
+                x_norm = X_raw
             
             # Get attention scores from backbone for each sample
             batch_attention_scores = []
             for i in range(x_norm.shape[0]):
-                single_sample = x_norm[i:i+1]  # (1, n_time_steps)
+                single_sample = x_norm[i:i+1]  # (1, n_steps)
                 attn_score = model.backbone.get_attention_scores(single_sample)  # (n_patches,)
                 batch_attention_scores.append(attn_score.cpu().numpy())
             
@@ -236,7 +260,7 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
             class_labels = torch.argmax(targets, dim=1).cpu().numpy()
             
             # Get input spectra
-            X = X_raw.cpu().numpy()  # (batch, n_time_steps)
+            X = X_raw.cpu().numpy()  # (batch, n_steps)
             
             # Aggregate by class
             for i, class_idx in enumerate(class_labels):
@@ -250,14 +274,15 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
     
     # Compute mean spectra and attention scores per class
     for class_idx in tqdm(sorted(class_spectra.keys()), desc="Plotting Attention Spectra", leave=False):
-        spectra = np.array(class_spectra[class_idx])  # (n_samples, n_time_steps)
+        spectra = np.array(class_spectra[class_idx])  # (n_samples, n_steps)
         attention_scores = np.array(class_attention_scores[class_idx])  # (n_samples, n_patches)
         
-        mean_spectrum = spectra.mean(axis=0)  # (n_time_steps,)
+        mean_spectrum = spectra.mean(axis=0)  # (n_steps,)
         mean_attention = attention_scores.mean(axis=0)  # (n_patches,) - mean attention per patch
+        mean_attention = mean_attention.squeeze()  # (n_patches,)
         
         # Plot single spectrum with patches colored by attention
-        n_patches = len(mean_attention)
+        n_patches = mean_attention.size
         
         fig, ax = plt.subplots(figsize=(14, 4))
         
@@ -265,23 +290,40 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
         
         # Normalize attention scores to [0, 1] for coloring
         norm_attention = (mean_attention - mean_attention.min()) / (mean_attention.max() - mean_attention.min() + 1e-6)
-        
+        norm_attention = norm_attention.squeeze()  # (n_patches,)
+
         # Plot spectrum with patches colored by attention scores
-        n_time_steps = len(mean_spectrum)
-        patch_width = n_time_steps / n_patches
+        n_steps = len(mean_spectrum)
+        patch_width = n_steps / n_patches
+        frequency_bins = np.arange(n_steps)*(nyquist_freq/n_steps)
         
         cmap = plt.cm.Reds
-        
-        for patch_idx, att_score in enumerate(norm_attention):
+
+        # Get top-5 attention patches
+        top_patches_idx = np.argsort(mean_attention)[-5:]
+        start_idx_freq = top_patches_idx * int(patch_width)-1
+        end_idx_freq = (top_patches_idx + 1) * int(patch_width)-1
+        top_attention_score = mean_attention[top_patches_idx]
+
+        df_top_attention.append(pd.DataFrame({
+            'Classes': [class_name for _ in range(len(top_patches_idx))],
+            'Patch Index': top_patches_idx,
+            'Frequency Range': [f"{frequency_bins[start]:.1f}-{frequency_bins[end]:.1f} Hz" for start,end in zip(start_idx_freq, end_idx_freq)],
+            'Attention Score': top_attention_score
+        }).sort_values(by='Attention Score', ascending=False))
+
+        # print(f"Attention score shape: {mean_attention.shape}, Mean spectrum shape: {mean_spectrum.shape}")
+        for patch_idx, att_score in np.ndenumerate(mean_attention):
+            patch_idx = patch_idx[0]
             start = int(patch_idx * patch_width)
             end = int((patch_idx + 1) * patch_width)
             
-            if start < n_time_steps and end <= n_time_steps:
-                ax.fill_between(range(start, end), mean_spectrum[start:end], alpha=0.7, 
+            if start < n_steps and end <= n_steps:
+                ax.fill_between(frequency_bins[start:end], mean_spectrum[start:end], alpha=0.7, 
                                color=cmap(att_score))
         
-        ax.plot(mean_spectrum, 'k-', linewidth=0.5, alpha=0.3)
-        ax.set_xlabel('Time Steps', fontweight='bold')
+        ax.plot(frequency_bins, mean_spectrum, 'k-', linewidth=0.5, alpha=0.3)
+        ax.set_xlabel('Frequency (Hz)', fontweight='bold')
         ax.set_ylabel('Amplitude', fontweight='bold')
         ax.grid(True, alpha=0.3)
         
@@ -289,16 +331,19 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
                      fontsize=14, fontweight='bold', y=0.995)
         
         # Add colorbar
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=mean_attention.min(), vmax=mean_attention.max()))
+        sm = plt.cm.ScalarMappable(cmap=cmap)#, norm=plt.Normalize(vmin=mean_attention.min(), vmax=mean_attention.max()))
         sm.set_array([])
         cbar = plt.colorbar(sm, ax=ax, pad=0.02)
         cbar.set_label('Attention Score', fontweight='bold')
         
         plt.tight_layout()
         
-        plt.savefig(os.path.join(run_dir, f'attention_spectrum_class_{class_name}.png'), 
+        plt.savefig(os.path.join(run_dir,f'attention_spectrum_class_{class_name}.png'), 
                    dpi=300, bbox_inches='tight')
+
         plt.close()
+
+    return df_top_attention
 
 def evaluate(run_dir, model, test_loader, device, task="classification"):
     """
@@ -359,8 +404,11 @@ def evaluate(run_dir, model, test_loader, device, task="classification"):
         # Rotation des labels pour éviter le chevauchement
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
+
+        # Sauvegarder la figure
+        os.makedirs(os.path.join(run_dir, "log"), exist_ok=True)
         
-        plt.savefig(os.path.join(run_dir, 'confusion_matrix.png'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(run_dir,'log', 'confusion_matrix.png'), dpi=300, bbox_inches='tight')
         plt.close()
 
     else:
@@ -369,16 +417,24 @@ def evaluate(run_dir, model, test_loader, device, task="classification"):
 
     return metrics
 
-def log_metrics(results_dict, csv_path="results/downstream/results_summary.csv"):
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+def log_metrics(run_dir, results_dict):
+    global_dir = "results/downstream"
+    filename = "metrics.csv"
+
+    run_filepath = os.path.join(run_dir, "log", filename)
+    global_filepath = os.path.join(global_dir, filename)
+
+    os.makedirs(run_dir, exist_ok=True)
+    os.makedirs(global_dir, exist_ok=True)
     
-    file_exists = os.path.isfile(csv_path)
-    
-    with open(csv_path, mode="a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=results_dict.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(results_dict)
+    for filepath in [run_filepath, global_filepath]:
+        file_exists = os.path.isfile(filepath)
+        
+        with open(filepath, mode="a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=results_dict.keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(results_dict)
 
 def move_batch_to_device(batch, device:torch.device):
     """
@@ -500,15 +556,16 @@ def train(
         "seed": args.seed,
         "data_ratio": args.data_ratio,
         "mask_ratio": "None",
+        "downsample_factor": "None",
     }
 
     # Add mask ratio if the backbone is MAE
     if args.backbone_init == "mae":
-        results_dict["mask_ratio"] = args.mask_ratio
+        results_dict["mask_ratio"] = args.mask_ratio if hasattr(args, "mask_ratio") else "None"
     
     # Add downsampling factor if it exists
     if args.backbone_init == "sap":
-        results_dict["downsampling_factor"] = args.downsampling_factor
+        results_dict["downsample_factor"] = args.downsample_factor if hasattr(args, "downsample_factor") else "None"
 
     results_dict.update(metrics)
 
@@ -516,5 +573,5 @@ def train(
     save_model_config(run_dir, args)
 
     # Sauvegarde dans CSV
-    log_metrics(results_dict)
+    log_metrics(run_dir, results_dict)
     print(f"Results added to csv : {results_dict}")

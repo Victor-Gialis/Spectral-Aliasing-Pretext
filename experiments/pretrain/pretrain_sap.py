@@ -2,30 +2,52 @@ import torch, random
 import numpy as np
 import argparse
 
-from models.ssl.mae import MAEModel
+from models.ssl.sap import SAPModel
 from dataset import dataloader
 from training.pretrain import train, evaluate
 from types import SimpleNamespace
 from models.backbone.registry import get_backbone
 
 def main(args):
+    """
+    Pretrain SAP model for self-supervised learning on time series data.
+    Args:
+       args (argparse): Arguments for the
+          pretrain SAP model.
+             - dataset (str): Dataset to pretrain.
+             - window_size (int): Size of time serie window.
+             - window_stride (int): Stride of time serie window.
+             - batch_size (int): Batch size for datal
+             - downstreaming_factor (int): Downstream factor
+             - model (str): Model to pretrain.
+             - learning_rate (float): Learning rate for Adam
+             - weight_decay (float): Weight decay for Adam
+             - epochs (int): Number of epochs to train
+    """
+    print("The deownsampling factor is : ", args.downsampling_factor, "with type of : ", type(args.downsampling_factor))
+
     # Set dataloader arguments
     args_dataloader = SimpleNamespace(
         name=args.pretrain_dataset,
         window_size=args.window_size,
         window_stride=args.window_stride,
         batch_size=args.batch_size,
+        downsampling_factor=args.downsampling_factor,
+        symetric_spectrum=args.symetric_spectrum,
         )
+    
     # Set backbone arguments
     args_backbone = SimpleNamespace(
         model="vit1d",
+        domain="frequency", # Use frequency-based learning method
+        normalization="z-score", # Use z-score normalization
     )
     # Set ssl arguments
     args_ssl = SimpleNamespace(
-        method="mae",
-        mask_ratio=args.mask_ratio,
+        method="sap",
+        downsampling_factor=args.downsampling_factor,
     )
-    
+
     # Set training arguments
     args_training = SimpleNamespace(
         learning_rate=args.learning_rate,
@@ -51,14 +73,14 @@ def main(args):
     # Compute min-max from X_raw train dataloader
     stats = dataloader.compute_stats_from_dataloader(train_loader)
     backbone._loads_stats(stats)
-
+    
     # Initialize ssl method
-    model = MAEModel(backbone, args_ssl)
+    model = SAPModel(backbone, args_ssl)
 
     # Define optimizer and scheduler    
     optimizer = torch.optim.AdamW(model.parameters(), lr= args_training .learning_rate, weight_decay=args_training.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args_training .epochs, eta_min=1e-6)
-        
+    
     # Start training
     train(
         model=model,
@@ -76,7 +98,7 @@ def main(args):
     )
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pretrain MAE Model")
+    parser = argparse.ArgumentParser(description="Pretrain SAP Model")
     
     # Dataloader
     parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI'], help='Name of the dataset to use for pretraining')
@@ -90,8 +112,23 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', type=float, default=1.1133e-5, help='Weight decay for optimizer')
     parser.add_argument('--epochs', type=int, required=True, help='Number of training epochs')
 
-    # MAE specific
-    parser.add_argument('--mask_ratio', type=float, required=True, help='Masking ratio for MAE')
+    # # SAP specific
+    parser.add_argument('--downsampling_factor', required=True, help='Downsampling factor')
+    parser.add_argument('--symetric_spectrum', action='store_true', help='Whether to use symetric spectrum for SAP')
     
     args = parser.parse_args()
+
+    # # Debugging arguments
+    # args = SimpleNamespace(
+    #     pretrain_dataset="CWRU",
+    #     downstream_dataset="CWRU",
+    #     batch_size=256,
+    #     window_size=2048,
+    #     window_stride=256,
+    #     learning_rate=0.0003695,
+    #     weight_decay=1.1133e-5,
+    #     epochs=5,
+    #     downsampling_factor=None,
+    # )
+
     main(args)

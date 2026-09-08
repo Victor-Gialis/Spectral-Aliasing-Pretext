@@ -20,10 +20,13 @@ def get_pretrained_backbone(
     # SSL methods
     from models.ssl.mae import MAEModel
     from models.ssl.sap import SAPModel
+    from models.ssl.ijepa import IJEPAModel
+    from models.ssl.ts2vec import TS2VecModel
 
     # Datasets
     from dataset.cwru import CWRUDataset
     from dataset.laspi import LASPIDataset
+    from dataset.cvrtest import CVRTESTDataset
 
     # -------------------------------------------------
     # Registries
@@ -31,11 +34,14 @@ def get_pretrained_backbone(
     SSL_REGISTRY = {
         "mae": MAEModel,
         "sap": SAPModel,
+        "ijepa": IJEPAModel,
+        "ts2vec": TS2VecModel,
     }
 
     DATASET_REGISTRY = {
         "CWRU": CWRUDataset,
         "LASPI": LASPIDataset,
+        "CVRTest": CVRTESTDataset,
     }
 
     assert method in SSL_REGISTRY, f"Unknown SSL method: {method}"

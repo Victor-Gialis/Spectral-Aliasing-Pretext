@@ -5,14 +5,14 @@ import numpy as np
 from tqdm import tqdm
 from types import SimpleNamespace
 
-from dataset import dataloader,split_data_factory
+from dataset import dataloader, split_data_factory
 from training.downstream import train, evaluate, log_metrics
 from training.pretrain import load_model_checkpoint
 from models.downstream.registry import get_downstream_model
 from models.backbone.vit1d import ViT1DEncoder
 from models.backbone.registry import get_backbone
 from models.ssl.registry import get_pretrained_backbone
-from models.ssl.sap import SAPModel
+from models.ssl.mae import MAEModel
 
 def main(args):
     """
@@ -47,21 +47,26 @@ def main(args):
 
     # Backbone
     backbone_random = ViT1DEncoder()
-    ssl_mode = SAPModel(backbone=backbone_random,
-                        args_ssl=dict()
-                        )
+    ssl_mode = MAEModel(backbone=backbone_random
+                        , args_ssl=SimpleNamespace(mask_ratio=1.0)
+    )
     
-    # Get last checkpoint for SAP pretrained on CWRU
-    checkpoints = os.listdir("results/pretrain/SAPModel/CWRUDataset")
-    checkpoints.sort()
+    if args.backbone_checkpoint_path is None:
+        # Get last checkpoint for MAE pretrained on CWRU
+        checkpoints = os.listdir("results/pretrain/MAEModel/CWRUDataset")
+        checkpoints.sort()
 
-    print("Available checkpoints:", checkpoints)
-    checkpoint_path = os.path.join("results/pretrain/SAPModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
+        print("Available checkpoints:", checkpoints)
+        checkpoint_path = os.path.join("results/pretrain/MAEModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
 
-    # checkpoint_path = "results/pretrain/SAPModel/CWRUDataset/20260123_165739"
+    else:
+        # Get checkpoint from specified path
+        checkpoint_path = args.backbone_checkpoint_path
+
+    # checkpoint_path = "results/pretrain/MAEModel/CWRUDataset/20260123_162146"
     ssl_model = load_model_checkpoint(ssl_mode, checkpoint_path)
-    args.downstream_ratio = ssl_model.downstream_ratio
-
+    args.mask_ratio = ssl_model.mask_ratio
+    
     backbone = ssl_model.backbone
 
     # Downstream model
@@ -101,7 +106,7 @@ def main(args):
     )
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Downstream SAP Model")
+    parser = argparse.ArgumentParser(description="Downstream MAE Model")
 
     # Dataloader
     parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST'], help='Name of the dataset to use for pretraining')
@@ -124,31 +129,10 @@ if __name__ == "__main__":
     parser.add_argument('--finetune', action='store_true', help='Whether to finetune the backbone during downstream training')
     parser.add_argument('--task', type=str, required=True, choices=["classification", "regression"], help='Type of downstream task (classification or regression)')
     parser.add_argument('--seed', type=int, required=True, help='Random seed for reproducibility')
+    parser.add_argument('--backbone_checkpoint_path', type=str, default=None, help='Path to the pretrained backbone model checkpoint (if not using SAP)')
 
     args = parser.parse_args()
-    args.backbone_init = "sap"
+    args.backbone_init = "mae"
 
     # Run experiment
     main(args)
-    
-    # # Debug example
-    # for data_ratio in [1.0]:
-    #     for fin in [True, False]:
-    #         for seed in range(1):
-    #             args = SimpleNamespace(
-    #                 backbone_init="sap",  # "random" | "sap" | "mae"
-    #                 pretrain_dataset="CWRU",
-    #                 downstream_dataset="CWRU",
-    #                 data_ratio=data_ratio,
-    #                 head_type="linear",
-    #                 finetune=fin,
-    #                 task="classification",
-    #                 seed=seed,
-    #                 epochs=50,
-    #                 batch_size=64,
-    #                 learning_rate=0.0003695,
-    #                 weight_decay=1.1133e-5,
-    #                 window_size=2048,
-    #                 window_stride=256,
-    #             )
-    #             main(args)

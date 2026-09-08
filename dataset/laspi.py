@@ -5,7 +5,7 @@ import pandas as pd
 from dataset.base import BaseDataset, Sample
 
 class LASPIDataset(BaseDataset):
-    def __init__(self, root_dir=None, fault_filter=None, speed_filter=None, window_size=2048, window_stride=256, downsampling_factor=None):
+    def __init__(self, root_dir=None, fault_filter=None, speed_filter=None, window_size=2048, window_stride=256, downsampling_factor=None, symetric_spectrum=True):
         """
         Args:
             transform (callable, optional): Transformation à appliquer aux données.
@@ -16,6 +16,7 @@ class LASPIDataset(BaseDataset):
                          window_size=window_size, 
                          window_stride=window_stride,
                          downsampling_factor=downsampling_factor,
+                         symetric_spectrum=symetric_spectrum, # LASPI dataset has non symetric spectrum
                          )
         
         # Fréquences d'échantillonnage pour chaque condition de fonctionnement

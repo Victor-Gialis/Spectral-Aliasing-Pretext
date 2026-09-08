@@ -76,6 +76,9 @@ class MAEModel(BaseSSLModel):
         # Ensure non-negative outputs
         x_pred = super().non_negative_output(x_pred)
 
+        # Restore mask in the original X shape
+        # mask = mask.unsqueeze(-1).expand(-1, -1, x_pred.shape[-1]).reshape(b, -1)
+
         return {"prediction":x_pred, "mask":mask}
 
     def compute_loss(self, outputs, inputs):
