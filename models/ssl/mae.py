@@ -16,6 +16,8 @@ class MAEModel(BaseSSLModel):
             heads (int): Number of attention heads.
             dropout (float): Dropout rate.
             mask_ratio (float): Ratio of tokens to mask during training.
+            loss_domain (str): Loss domain ('linear' or 'log'). Default to 'linear'.
+            revin (bool): Whether to use Reversible Instance Normalization (ReVIN). Default to True.
         """
         super(BaseSSLModel, self).__init__()
 
@@ -29,6 +31,15 @@ class MAEModel(BaseSSLModel):
 
         # Create pretrain head
         self.decoder = ViT1DDecoder()
+        
+        # Loss function
+        self.loss_function = torch.nn.MSELoss()
+        
+        # Parameters for MAE (generalized from SAP)
+        self.loss_domain = args_ssl.loss_domain if hasattr(args_ssl, 'loss_domain') else 'linear'  # Default to linear domain
+        self.revin = args_ssl.revin if hasattr(args_ssl, 'revin') else True  # Default to Reversible Instance Normalization (ReVIN)
+
+        print(f"MAEModel initialized with mask_ratio={self.mask_ratio}, loss_domain={self.loss_domain}, revin={self.revin}")
 
         self._initialize_weights()
 
@@ -44,13 +55,10 @@ class MAEModel(BaseSSLModel):
         Returns:
             dict: A dictionary containing the reconstructed output and the mask.
         """
-        x_raw = batch['X_raw']
-
-        # Normalization
-        x_norm = normalization.global_z_log_normalization(x=x_raw, stats=self.backbone.stats)
+        x_raw_scaled = batch['X_raw_scaled']
 
         # Tokenisation
-        input_tokens = self.backbone.forward_tokeniser(x_norm)
+        input_tokens = self.backbone.forward_tokeniser(x_raw_scaled)
         b, n, _ = input_tokens.shape
 
         # Apply random masking
@@ -70,11 +78,18 @@ class MAEModel(BaseSSLModel):
         # Decode to reconstruct original input
         x_pred_norm = self.decoder(embedded_tokens_)
 
-        # Unnormalize
-        x_pred = normalization.global_z_log_unnormalization(x_norm=x_pred_norm, stats=self.backbone.stats)
+        # ReVIN (Reversible Instance Normalization)
+        if self.revin:
+            if self.backbone.scaling_method == 'normalization':
+                x_pred = self.unnormalize(batch, x_pred_norm)
 
-        # Ensure non-negative outputs
-        x_pred = super().non_negative_output(x_pred)
+            elif self.backbone.scaling_method == 'standardization':
+                x_pred = self.unstandardize(batch, x_pred_norm)
+
+            # Ensure non-negative outputs
+            x_pred = super().non_negative_output(x_pred)
+        else:
+            x_pred = x_pred_norm
 
         # Restore mask in the original X shape
         # mask = mask.unsqueeze(-1).expand(-1, -1, x_pred.shape[-1]).reshape(b, -1)
@@ -91,8 +106,17 @@ class MAEModel(BaseSSLModel):
         predictions = predictions.reshape(b, l // self.backbone.patch_size, self.backbone.patch_size)
         targets = targets.reshape(b, l // self.backbone.patch_size, self.backbone.patch_size)
         
+        # Calculate MSE in chosen domain
+        if self.loss_domain == 'linear':
+            # Convert from log domain to linear domain
+            targets_linear = torch.expm1(targets)
+            predictions_linear = torch.expm1(predictions)
+            loss = ((predictions_linear - targets_linear) ** 2)
+        else:  # 'log' domain (default)
+            loss = ((predictions - targets) ** 2)
+        
         # Compute loss only on masked tokens
-        loss = ((predictions - targets) ** 2)
+        # Note: mask = 1 for masked tokens, 0 for kept tokens
         loss = (loss * mask.unsqueeze(-1)).sum() / mask.sum()
         
         return loss

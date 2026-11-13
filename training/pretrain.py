@@ -2,6 +2,7 @@ import csv,os, json
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import pandas as pd
 import numpy as np
 
@@ -14,6 +15,7 @@ from models.ssl.mae import MAEModel
 from models.ssl.sap import SAPModel
 from models.ssl.ts2vec import TS2VecModel
 from models.ssl.tstcc import TSTCCModel
+from models.ssl.sajepa import SAJEPAModel
 
 # Utilities for pretraining
 def create_run_dir(method:str, dataset:str)->Path:
@@ -125,9 +127,9 @@ def save_model_checkpoint(run_dir:Path, model:nn.Module, name:str="model.pt"):
         if hasattr(model.backbone, 'domain'):
             checkpoint['backbone_domain'] = model.backbone.domain
 
-        # Save backbone normalization if it exists
-        if hasattr(model.backbone, 'normalization'):
-            checkpoint['backbone_normalization'] = model.backbone.normalization
+        # Save backbone scaling method if it exists
+        if hasattr(model.backbone, 'scaling_method'):
+            checkpoint['backbone_scaling_method'] = model.backbone.scaling_method
     
     # Save additional SSL parameters if MAE model
     if isinstance(model, MAEModel):
@@ -145,6 +147,11 @@ def save_model_checkpoint(run_dir:Path, model:nn.Module, name:str="model.pt"):
             checkpoint['enc_mask_ratio'] = model.enc_mask_ratio
         if hasattr(model, 'pred_mask_ratio'):
             checkpoint['pred_mask_ratio'] = model.pred_mask_ratio
+        if hasattr(model, 'momentum'):
+            checkpoint['momentum'] = model.momentum
+    
+    # Save additional SSL parameters if SA-JEPA model
+    if isinstance(model, SAJEPAModel):
         if hasattr(model, 'momentum'):
             checkpoint['momentum'] = model.momentum
     
@@ -195,8 +202,8 @@ def load_model_checkpoint(model:nn.Module, checkpoint_path:Path)->nn.Module:
             if 'backbone_domain' in checkpoint:
                 model.backbone.domain = checkpoint['backbone_domain']
             
-            if 'backbone_normalization' in checkpoint:
-                model.backbone.normalization = checkpoint['backbone_normalization']
+            if 'backbone_scaling_method' in checkpoint:
+                model.backbone.scaling_method = checkpoint['backbone_scaling_method']
 
             # Restore SSL method metadata if MAE model
             if isinstance(model, MAEModel):
@@ -216,9 +223,14 @@ def load_model_checkpoint(model:nn.Module, checkpoint_path:Path)->nn.Module:
                     model.pred_mask_ratio = checkpoint['pred_mask_ratio']
                 if 'momentum' in checkpoint:
                     model.momentum = checkpoint['momentum']
+            
+            # Restore SSL method metadata if SA-JEPA model
+            if isinstance(model, SAJEPAModel):
+                if 'momentum' in checkpoint:
+                    model.momentum = checkpoint['momentum']
                     
             # Restore SSL method metadata if TS2Vec model
-            elif isinstance(model, TS2VecModel):
+            if isinstance(model, TS2VecModel):
                 if 'temperature' in checkpoint:
                     model.temperature = checkpoint['temperature']
                 if 'use_cosine_similarity' in checkpoint:
@@ -227,7 +239,7 @@ def load_model_checkpoint(model:nn.Module, checkpoint_path:Path)->nn.Module:
                     model.temporal_unit = checkpoint['temporal_unit']
 
             # Restore SSL method metadata if TS-TCC model
-            elif isinstance(model, TSTCCModel):
+            if isinstance(model, TSTCCModel):
                 if 'temperature' in checkpoint:
                     model.temperature = checkpoint['temperature']
                 if 'timesteps' in checkpoint:
@@ -240,18 +252,23 @@ def load_model_checkpoint(model:nn.Module, checkpoint_path:Path)->nn.Module:
     
     return model
 
-def move_batch_to_device(batch, device:torch.device):
+def move_batch_to_device(batch, device:torch.device, target_dtype:torch.dtype=torch.float16):
     """
-    Move batch data to the specified device.
+    Move batch data to the specified device and convert to float16 (reduced precision for faster training).
     Args:
         batch (dict): Batch data containing tensors.
         device (torch.device): Target device.
+        target_dtype (torch.dtype): Target data type (ignored, always float16).
     Returns:
-        dict: Batch data on the target device.
+        dict: Batch data on the target device with float32 dtype.
     """
     for k, v in batch.items():
         if torch.is_tensor(v):
-            batch[k] = v.to(device, non_blocking=True)
+            # Always convert to float32 for consistency
+            if v.is_floating_point():
+                batch[k] = v.to(device, dtype=torch.float32, non_blocking=True)
+            else:
+                batch[k] = v.to(device, non_blocking=True)
     return batch
 
 def evaluate(run_dir:Path,
@@ -343,6 +360,83 @@ def save_global_metrics(run_dir:Path, best_valid_loss:float, last_valid_loss:flo
             writer.writeheader()
         writer.writerow(results_dict)
 
+def save_reconstruction_frame(run_dir:Path, epoch:int, x_raw:np.ndarray, x_pred:np.ndarray, sample_idx:int, loss:float):
+    """
+    Save a single reconstruction frame for creating a GIF.
+    Args:
+        run_dir (Path): Directory to save the frame.
+        epoch (int): Current epoch number.
+        x_raw (np.ndarray): Raw signal.
+        x_pred (np.ndarray): Predicted signal.
+        sample_idx (int): Index of the sample in the batch.
+        loss (float): Loss value for the epoch.
+    """
+    frames_dir = run_dir / "log" / "reconstruction_frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(x_raw[sample_idx], label='Raw Signal', alpha=0.7, linewidth=2)
+    ax.plot(x_pred[sample_idx], label='Reconstructed Signal', alpha=0.7, linewidth=2)
+    ax.set_title(f'Epoch {epoch} | Loss: {loss:.4f}', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Frequency bins', fontsize=12)
+    ax.set_ylabel('Amplitude', fontsize=12)
+    ax.legend(fontsize=11)
+    ax.grid(alpha=0.3)
+    
+    frame_path = frames_dir / f"frame_{epoch:04d}.png"
+    plt.savefig(frame_path, dpi=100, bbox_inches='tight')
+    plt.close()
+    
+    return frame_path
+
+def create_reconstruction_gif(run_dir:Path, duration:float=0.5):
+    """
+    Create a GIF from reconstruction frames saved during training using matplotlib.animation.
+    Args:
+        run_dir (Path): Directory containing the frames.
+        duration (float): Duration each frame is displayed in seconds.
+    Returns:
+        bool: True if GIF was created successfully, False otherwise.
+    """
+    frames_dir = run_dir / "log" / "reconstruction_frames"
+    
+    if not frames_dir.exists() or not list(frames_dir.glob("*.png")):
+        print("No reconstruction frames found. Skipping GIF creation.")
+        return False
+    
+    # Sort frames by epoch number
+    frame_files = sorted(frames_dir.glob("frame_*.png"), key=lambda x: int(x.stem.split('_')[1]))
+    
+    if not frame_files:
+        return False
+    
+    # Create animation from saved frames
+    try:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ims = []
+        
+        for frame_file in frame_files:
+            img = plt.imread(str(frame_file))
+            im = ax.imshow(img, animated=True)
+            ims.append([im])
+        
+        ax.axis('off')
+        
+        # Create animation with duration in milliseconds
+        ani = animation.ArtistAnimation(fig, ims, interval=int(duration*1000), blit=True, repeat=True)
+        
+        # Save as GIF using PillowWriter
+        gif_path = run_dir / "log" / "reconstruction_evolution.gif"
+        writer = animation.PillowWriter(fps=1/duration)
+        ani.save(str(gif_path), writer=writer)
+        plt.close()
+        
+        print(f"✓ GIF created: {gif_path}")
+        return True
+    except Exception as e:
+        print(f"✗ Failed to create GIF: {e}")
+        return False
+
 # Core pretraining loop
 def train(
         model:nn.Module,
@@ -381,8 +475,14 @@ def train(
     # Create run directory
     run_dir = create_run_dir(method=model.__class__.__name__, dataset=train_loader.dataset.dataset.__class__.__name__) 
     
-    # Move model to device
-    model.to(device)
+    # Move model to device and convert to float32 (standard PyTorch dtype)
+    model = model.to(device, dtype=torch.float32)
+    # Force all parameters and buffers to float32
+    for param in model.parameters():
+        param.data = param.data.to(torch.float32)
+    for buf in model.buffers():
+        buf.data = buf.data.to(torch.float32)
+    
     best_valid_loss = float('inf')
 
     last_valid_loss = float('inf')
@@ -390,8 +490,15 @@ def train(
 
     best_valid_loss = float('inf')
     best_train_loss = float('inf')
+    
+    # Fixed reference sample for GIF tracking
+    reference_x_raw = None
+    reference_sample_idx = 0
 
     for epoch in range(1, epochs + 1):
+        # Compute start time for epoch
+        start = datetime.now()
+
         # Training phase
         model.train()
         train_loss = 0.0
@@ -418,6 +525,9 @@ def train(
         if train_loss < best_train_loss:
             best_train_loss = train_loss
 
+        stop = datetime.now()
+        delta = stop - start
+
         # Validation phase
         model.eval()
         valid_loss = 0.0
@@ -439,9 +549,32 @@ def train(
             scheduler.step()
 
         print(f"Epoch {epoch}/{epochs} - Train Loss: {train_loss:.4f}, Valid Loss: {valid_loss:.4f}")
+        print(f"Time taken for epoch : {delta}")
 
-        if run_dir:
-            log_metrics(run_dir, epoch, train_loss, valid_loss)
+        # Create GIF reconstruction for MAE and SAP methods
+        if isinstance(model, (MAEModel, SAPModel, SAJEPAModel, IJEPAModel)):
+            if run_dir:
+                log_metrics(run_dir, epoch, train_loss, valid_loss)
+                
+                # Save reconstruction frame for GIF every epoch
+                model.eval()
+                with torch.no_grad():
+                    for batch_idx, batch in enumerate(valid_loader):
+                        inputs = move_batch_to_device(batch, device)
+                        outputs = model(inputs)
+                        
+                        x_raw = batch['X_raw'].detach().cpu().numpy()
+                        x_pred = outputs['prediction'].detach().cpu().numpy()
+                        
+                        # Save reference sample on first epoch
+                        if epoch == 1:
+                            reference_x_raw = x_raw.copy()
+                            reference_sample_idx = 0
+                        
+                        # Use the fixed reference sample from first epoch (batch 0, sample 0)
+                        if batch_idx == 0:
+                            save_reconstruction_frame(run_dir, epoch, reference_x_raw, x_pred, reference_sample_idx, valid_loss)
+                            break  # Only need first batch
 
         # Save best model
         if run_dir and (epoch == 1 or valid_loss < best_valid_loss):
@@ -456,6 +589,10 @@ def train(
         save_model_checkpoint(run_dir, model, name="last.pt")
         save_model_config(run_dir, args_dataloader, args_backbone, args_ssl, args_training) # Save config file
         plot_metrics(run_dir) # Plot training metrics
+
+        # Create GIF from reconstruction frames if MAE or SAP
+        if isinstance(model, (MAEModel, SAPModel)):
+            create_reconstruction_gif(run_dir, duration=0.5)  # Create GIF from frames
 
     print("Training complete.")
 

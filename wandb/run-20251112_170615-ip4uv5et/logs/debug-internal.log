@@ -1,6 +1,0 @@
-{"time":"2025-11-12T17:06:16.000615545+01:00","level":"INFO","msg":"stream: starting","core version":"0.22.2"}
-{"time":"2025-11-12T17:06:16.256257518+01:00","level":"INFO","msg":"stream: created new stream","id":"ip4uv5et"}
-{"time":"2025-11-12T17:06:16.256335452+01:00","level":"INFO","msg":"stream: started","id":"ip4uv5et"}
-{"time":"2025-11-12T17:06:16.256364283+01:00","level":"INFO","msg":"handler: started","stream_id":"ip4uv5et"}
-{"time":"2025-11-12T17:06:16.256372274+01:00","level":"INFO","msg":"writer: started","stream_id":"ip4uv5et"}
-{"time":"2025-11-12T17:06:16.256406132+01:00","level":"INFO","msg":"sender: started","stream_id":"ip4uv5et"}

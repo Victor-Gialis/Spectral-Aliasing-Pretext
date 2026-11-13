@@ -5,16 +5,29 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import os
+import copy
 
 from torch.utils.data import DataLoader
 from torch.utils.data import DataLoader, WeightedRandomSampler, Subset
 from sklearn.model_selection import train_test_split
+
+import dataset
+
+# Helper function to determine pin_memory based on GPU availability
+def get_pin_memory():
+    """Determine if pin_memory should be True based on GPU availability."""
+    return torch.cuda.is_available()
 
 # Mapping dataset names to their root directories
 DATASET_PATHS = {
     "CWRU": "data/raw/CWRU",
     "LASPI": "data/raw/LASPI",
     "CVRTEST": "data/raw/CVR_Test",
+    "HUST": "data/raw/HUST/HUST bearing dataset",
+    "PADERBORN": "data/raw/PADERBORN",
+    "PHM09": "data/raw/PHM09",
+    "PHM12": "data/raw/PHM12",
+    "PHM07": "data/raw/PHM07",
 }
 
 def get_dataset(args:object):
@@ -24,7 +37,7 @@ def get_dataset(args:object):
         name (str): Name of the dataset (e.g., 'CWRU', 'LASPI').
         **kwargs: Additional keyword arguments to pass to the dataset constructor.
     """
-    name = args.name
+    name = args.name[0] if isinstance(args.name, list) else args.name
     base_path = DATASET_PATHS[name.upper()]
 
     module = importlib.import_module(f"dataset.{name.lower()}")
@@ -392,9 +405,10 @@ def get_speed_load_stratified_dataloaders(args:object, train_val_combinations:li
         replacement=True
     )
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, collate_fn=collate_fn,num_workers=5, pin_memory=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn,num_workers=5, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn,num_workers=5, pin_memory=True)
+    pin_memory = get_pin_memory()
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, collate_fn=collate_fn,num_workers=5, pin_memory=pin_memory)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn,num_workers=5, pin_memory=pin_memory)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn,num_workers=5, pin_memory=pin_memory)
     
     return train_loader, valid_loader, test_loader, np.unique(labels), dataset
 
@@ -516,11 +530,235 @@ def get_laspi_acquisition_split_dataloaders(args:object, seed:int=42):
         replacement=True
     )
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, collate_fn=collate_fn, num_workers=5, pin_memory=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=5, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=5, pin_memory=True)
+    pin_memory = get_pin_memory()
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, collate_fn=collate_fn, num_workers=5, pin_memory=pin_memory)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=5, pin_memory=pin_memory)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=5, pin_memory=pin_memory)
     
     return train_loader, valid_loader, test_loader, np.unique(labels), dataset
+
+def get_multi_dataset_ssl_dataloader(args: object, dataset_names: list, batch_size: int = None, num_workers: int = 5, pin_memory: bool = None, shuffle: bool = True):
+    """
+    Create a dataloader for SSL training on multiple datasets combined.
+    
+    Args:
+        args: Arguments object with standard dataset parameters
+        dataset_names: List of dataset names to combine (e.g., ['CWRU', 'LASPI', 'HUST'])
+        batch_size: Batch size for the dataloader (uses args.batch_size if None)
+        num_workers: Number of workers for data loading
+        pin_memory: Whether to pin memory for faster GPU transfer
+        shuffle: Whether to shuffle the combined dataset
+    
+    Returns:
+        dataloader: PyTorch DataLoader with combined data from all datasets
+        combined_dataset: The combined ConcatDataset
+    
+    Example:
+        dataloader, dataset = get_multi_dataset_ssl_dataloader(
+            args,
+            dataset_names=['CWRU', 'LASPI', 'HUST'],
+            batch_size=64
+        )
+    """
+    from torch.utils.data import ConcatDataset
+    
+    if batch_size is None:
+        batch_size = args.batch_size
+    
+    if pin_memory is None:
+        pin_memory = get_pin_memory()
+    
+    # Load all datasets
+    datasets = []
+    print(f"Loading {len(dataset_names)} datasets for SSL training...")
+    
+    for dataset_name in tqdm(dataset_names, desc="Loading datasets"):
+        # Create a temporary args object with the dataset name
+        args_copy = type('obj', (object,), vars(args).copy())()
+        args_copy.name = dataset_name
+        
+        try:
+            ds = get_dataset(args_copy)
+            datasets.append(ds)
+            print(f"✓ Loaded {dataset_name} with {len(ds)} samples")
+        except Exception as e:
+            print(f"✗ Failed to load {dataset_name}: {str(e)}")
+            continue
+    
+    if not datasets:
+        raise ValueError(f"No datasets were successfully loaded from {dataset_names}")
+    
+    # Combine all datasets
+    combined_dataset = ConcatDataset(datasets)
+    print(f"\nTotal combined dataset size: {len(combined_dataset)} samples from {len(datasets)} datasets")
+    
+    # Use collate_fn from the first dataset if available
+    collate_fn = getattr(datasets[0], '_collate_fn', None)
+    if collate_fn is None:
+        from torch.utils.data.dataloader import default_collate
+        collate_fn = default_collate
+    
+    # Create dataloader
+    dataloader = DataLoader(
+        combined_dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    )
+    
+    return dataloader, combined_dataset
+
+
+def get_multi_dataset_ssl_splits(args: object):
+    """
+    Create train/valid/test dataloaders for SSL training on multiple datasets with stratified splits.
+    
+    Args:
+        args: Arguments object with standard dataset parameters
+        dataset_names: List of dataset names to combine
+        batch_size: Batch size for the dataloaders (uses args.batch_size if None)
+        num_workers: Number of workers for data loading
+        pin_memory: Whether to pin memory for faster GPU transfer
+        data_ratio: Fraction of training data to use (for data scarcity experiments)
+        seed: Random seed for reproducibility
+    
+    Returns:
+        train_loader: DataLoader for training
+        valid_loader: DataLoader for validation
+        test_loader: DataLoader for testing
+        combined_dataset: The combined ConcatDataset
+    
+    Example:
+        train_loader, valid_loader, test_loader, dataset = get_multi_dataset_ssl_splits(
+            args,
+            dataset_names=['CWRU', 'LASPI', 'HUST'],
+            batch_size=64
+        )
+    """
+    from torch.utils.data import ConcatDataset
+
+    num_workers = 5
+    pin_memory = get_pin_memory()
+    data_ratio = 1.0
+    seed = 42
+
+    batch_size = args.batch_size
+    dataset_names = args.name
+    
+    # Load all datasets
+    datasets = []
+    print(f"Loading {len(dataset_names)} datasets for SSL training...")
+    
+    for dataset_name in tqdm(dataset_names, desc="Loading datasets"):
+        # args_copy = type('obj', (object,), vars(args).copy())()
+        args_copy = copy.copy(args)
+        args_copy.name = dataset_name
+        
+        try:
+            ds = get_dataset(args_copy)
+            datasets.append(ds)
+            print(f"✓ Loaded {dataset_name} with {len(ds)} samples")
+        except Exception as e:
+            print(f"✗ Failed to load {dataset_name}: {str(e)}")
+            continue
+    
+    if not datasets:
+        raise ValueError(f"No datasets were successfully loaded from {dataset_names}")
+    
+    # Combine all datasets
+    combined_dataset = ConcatDataset(datasets)
+    print(f"\nTotal combined dataset size: {len(combined_dataset)} samples from {len(datasets)} datasets")
+    
+    # Create stratification variable based on dataset and class label
+    indices = np.arange(len(combined_dataset))
+    strata = []
+    
+    current_offset = 0
+    for dataset_idx, ds in enumerate(datasets):
+        for local_idx in range(len(ds)):
+            sample = ds[local_idx]
+            label = sample.get('y_label', 'unknown')
+            dataset_name = dataset_names[dataset_idx]
+            strata.append(f"{dataset_name}_{label}")
+        current_offset += len(ds)
+    
+    strata = np.array(strata)
+    
+    # Split train/val/test with stratification
+    train_size = int(0.6 * len(combined_dataset))
+    valid_size = int(0.2 * len(combined_dataset))
+    test_size = len(combined_dataset) - train_size - valid_size
+    
+    train_idx, test_val_idx = train_test_split(
+        indices,
+        test_size=0.4,
+        stratify=strata,
+        random_state=42
+    )
+    
+    valid_idx, test_idx = train_test_split(
+        test_val_idx,
+        test_size=0.5,
+        stratify=strata[test_val_idx],
+        random_state=42
+    )
+    
+    # Apply data scarcity if needed
+    if data_ratio < 1.0:
+        _, scarcity_train_idx = train_test_split(
+            train_idx,
+            test_size=data_ratio,
+            stratify=strata[train_idx],
+            random_state=seed
+        )
+    else:
+        scarcity_train_idx = train_idx
+    
+    # Create subsets
+    train_dataset = Subset(combined_dataset, scarcity_train_idx)
+    valid_dataset = Subset(combined_dataset, valid_idx)
+    test_dataset = Subset(combined_dataset, test_idx)
+    
+    # Get collate function
+    collate_fn = getattr(datasets[0], '_collate_fn', None)
+    if collate_fn is None:
+        from torch.utils.data.dataloader import default_collate
+        collate_fn = default_collate
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    )
+    
+    valid_loader = DataLoader(
+        valid_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    )
+    
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory
+    )
+    
+    print(f"Train: {len(train_dataset)} | Valid: {len(valid_dataset)} | Test: {len(test_dataset)}")
+    
+    return train_loader, valid_loader, test_loader, combined_dataset
+
 
 @torch.no_grad()
 def compute_stats_from_dataloader(dataloader, device=None, verbose=True):
@@ -537,16 +775,20 @@ def compute_stats_from_dataloader(dataloader, device=None, verbose=True):
     """
     min_val = float("inf")
     max_val = float("-inf")
-    mean_val = 0.0
-    std_val = 0.0
+
+    # mean_val = 0.0
+    # std_val = 0.0
+
+    n = 0
+    sum_x = 0
+    sum_x2 = 0
 
     iterator = dataloader
     if verbose:
         iterator = tqdm(iterator, desc="Computing stats from DataLoader")
 
     for batch in iterator:
-        # X_raw = batch["X_raw"]
-        X_raw = torch.log1p(batch["X_raw"])
+        X_raw = batch["X_raw"]
 
         if device is not None:
             X_raw = X_raw.to(device, non_blocking=True)
@@ -557,10 +799,13 @@ def compute_stats_from_dataloader(dataloader, device=None, verbose=True):
         min_val = min(min_val, batch_min)
         max_val = max(max_val, batch_max)
 
-        mean_val += X_raw.mean().item() * X_raw.size(0)
-        std_val += X_raw.std().item() * X_raw.size(0)
+        n += X_raw.numel()
+        sum_x += X_raw.sum().item()
+        sum_x2 += (X_raw ** 2).sum().item()
 
-    mean_val /= len(dataloader.dataset)
-    std_val /= len(dataloader.dataset)
+    # Compute mean and std
+    mean_val = sum_x / n
+    var = (sum_x2 / n) - (mean_val ** 2)
+    std_val = var ** 0.5
 
     return {"min": min_val, "max": max_val, "mean": mean_val, "std": std_val}

@@ -25,6 +25,8 @@ class Tokeniser(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
+        n = x.shape[-1]//self.patch_size
+        x = x[:, :n*self.patch_size]  # Trim the input to be a multiple of patch_size
         x = self.projection(x)
         return x
 
@@ -78,12 +80,12 @@ class PreNorm(nn.Module):
 
 # Feed Forward
 class FeedForward(nn.Sequential):
-    def __init__(self, dim, hidden_dim, dropout=0.):
+    def __init__(self, hidden_dim, dropout=0.):
         super().__init__(
-            nn.Linear(dim, hidden_dim),
+            nn.Linear(hidden_dim, 4*hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
+            nn.Linear(4*hidden_dim, hidden_dim),
             nn.Dropout(dropout)
         )
 

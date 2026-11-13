@@ -84,7 +84,7 @@ class DilatedConv(nn.Module):
 
 ### Use in the TS2Vec model as the backbone encoder to extract features from time series data. The encoder consists of a series of dilated convolutional blocks that capture temporal dependencies at multiple scales.
 class DilatedCNNEncoder(nn.Module):
-    def __init__(self, input_dim=1, hidden_dim=128, depth=5, kernel_size=3, dropout=0.1, domain="time", normalization=None):
+    def __init__(self, input_dim=1, hidden_dim=128, depth=5, kernel_size=3, dropout=0.1, domain=None, scaling_method=None):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -92,7 +92,7 @@ class DilatedCNNEncoder(nn.Module):
         self.kernel_size = kernel_size
         self.dropout = dropout  # Dropout rate for regularization
         self.domain = domain
-        self.normalization = normalization
+        self.scaling_method = scaling_method
 
         # Pretrain dataset Stats
         self.stats = dict()
@@ -151,7 +151,7 @@ class DilatedCNNEncoder(nn.Module):
 
 ### Use in TS-TCC architecture as the backbone encoder to extract features from time series data. The encoder consists of a series of dilated convolutional blocks that capture temporal dependencies at multiple scales.
 class CNNEncoder(nn.Module):
-    def __init__(self, input_dim=1, hidden_dim=128, kernel_size=3, stride=1, dropout=0.1, domain="time", normalization=None):
+    def __init__(self, input_dim=1, hidden_dim=128, kernel_size=3, stride=1, dropout=0.1, domain=None, scaling_method=None):
         super().__init__()
 
         # Encoder hyperparameters
@@ -161,7 +161,7 @@ class CNNEncoder(nn.Module):
         self.stride = stride
         self.dropout = dropout  # Dropout rate for regularization
         self.domain = domain
-        self.normalization = normalization
+        self.scaling_method = scaling_method
 
         # Pretrain dataset Stats
         self.stats = dict()

@@ -5,7 +5,14 @@ from tqdm import tqdm
 from dataset.base import BaseDataset, Sample
 
 class CVRTESTDataset(BaseDataset):
-    def __init__(self, root_dir=None, fault_filter=None, speed_filter=None, window_size=2048, window_stride=256, downsampling_factor=None):
+    def __init__(self, 
+                 root_dir=None, 
+                 fault_filter=None, 
+                 speed_filter=None, 
+                 window_size=2048, 
+                 window_stride=256, 
+                 downsampling_factor=None, 
+                 scaling_method=None):
         """
         Dataset pour CVR_Test avec données temporelles multivariées.
         
@@ -40,6 +47,7 @@ class CVRTESTDataset(BaseDataset):
                          speed_filter=speed_filter,
                          window_size=window_size, 
                          window_stride=window_stride,
+                         scaling_method=scaling_method,
                          downsampling_factor=downsampling_factor
                          )
     
@@ -70,7 +78,7 @@ class CVRTESTDataset(BaseDataset):
 
         # S'assurer que les données sont des tensors
         if isinstance(inputs, np.ndarray):
-            inputs = torch.tensor(inputs, dtype=torch.float32)
+            inputs = torch.tensor(inputs, dtype=torch.float16)
             print(f"✓ Inputs convertis en torch.Tensor: shape {inputs.shape}, dtype {inputs.dtype}")
         if isinstance(outputs, np.ndarray):
             outputs = torch.tensor(outputs, dtype=torch.long)

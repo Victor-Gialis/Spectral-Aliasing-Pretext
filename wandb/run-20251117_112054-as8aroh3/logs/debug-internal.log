@@ -1,8 +1,0 @@
-{"time":"2025-11-17T11:20:54.696523262+01:00","level":"INFO","msg":"stream: starting","core version":"0.22.2"}
-{"time":"2025-11-17T11:20:54.951176019+01:00","level":"INFO","msg":"stream: created new stream","id":"as8aroh3"}
-{"time":"2025-11-17T11:20:54.951242645+01:00","level":"INFO","msg":"stream: started","id":"as8aroh3"}
-{"time":"2025-11-17T11:20:54.951273409+01:00","level":"INFO","msg":"handler: started","stream_id":"as8aroh3"}
-{"time":"2025-11-17T11:20:54.951294551+01:00","level":"INFO","msg":"writer: started","stream_id":"as8aroh3"}
-{"time":"2025-11-17T11:20:54.951303216+01:00","level":"INFO","msg":"sender: started","stream_id":"as8aroh3"}
-{"time":"2025-11-18T02:53:25.803155225+01:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/victor-gialis-universit-jean-monnet-saint-etienne/downstream_diagnostics/as8aroh3/file_stream\": dial tcp: lookup api.wandb.ai on 127.0.0.53:53: server misbehaving"}
-{"time":"2025-11-18T07:33:26.021173244+01:00","level":"INFO","msg":"api: retrying HTTP error","status":502,"url":"https://api.wandb.ai/files/victor-gialis-universit-jean-monnet-saint-etienne/downstream_diagnostics/as8aroh3/file_stream","body":"\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>502 Server Error</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Server Error</h1>\n<h2>The server encountered a temporary error and could not complete your request.<p>Please try again in 30 seconds.</h2>\n<h2></h2>\n</body></html>\n"}

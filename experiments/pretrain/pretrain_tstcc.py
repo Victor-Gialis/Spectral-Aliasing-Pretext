@@ -15,13 +15,14 @@ def main(args):
         window_size=args.window_size,
         window_stride=args.window_stride,
         batch_size=args.batch_size,
+        scaling_method=args.scaling_method,
         )
     # Set backbone arguments
     # --------------------------------------------------------
     args_backbone = SimpleNamespace(
         model="cnn", 
-        domain="time", # Use time-based learning method
-        normalization=None, # Use z-score normalization
+        domain=args.domain, # Use time-based learning method
+        scaling_method=args.scaling_method, # Use scaling method
 
     )
     # Set ssl arguments
@@ -91,6 +92,9 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--window_size', type=int, default=2048, help='Window size for data segments')
     parser.add_argument('--window_stride', type=int, default=256, help='Stride for windowing data segments')
+
+    parser.add_argument('--domain', type=str, default='frequency', choices=['frequency','time'], help='Domain for the backbone model (time or frequency).')
+    parser.add_argument('--scaling_method', type=str, default='standardization', choices=[None,'normalization','standardization'], help='Scaling method for the dataset')
 
     # Training
     parser.add_argument('--learning_rate', type=float, default=3e-4, help='Learning rate for optimizer')

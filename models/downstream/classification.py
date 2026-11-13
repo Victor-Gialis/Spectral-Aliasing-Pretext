@@ -32,9 +32,8 @@ class LinearClassificationHead(nn.Module):
         self.lb.fit(labels)
 
     def transform_labels(self, labels):
-        targets = torch.tensor(self.lb.transform(labels))
-        targets = targets.float()
-        targets = targets.to(self.device)
+        targets = torch.tensor(self.lb.transform(labels), dtype=torch.float32)
+        targets = targets.to(self.device, dtype=torch.float32)
         return targets
 
     def forward(self, x):
@@ -44,7 +43,7 @@ class LinearClassificationHead(nn.Module):
         y_label = inputs['y_label']
 
         targets = torch.argmax(self.transform_labels(y_label), dim=-1)
-        predictions = outputs
+        predictions = outputs.to(torch.float32)  # Ensure predictions are float32
         
         return self.loss_function(predictions, targets)
 class MLPClassificationHead(nn.Module):
@@ -82,9 +81,8 @@ class MLPClassificationHead(nn.Module):
         self.lb.fit(labels)
     
     def transform_labels(self, labels):
-        targets = torch.tensor(self.lb.transform(labels))
-        targets = targets.float()
-        targets = targets.to(self.device)
+        targets = torch.tensor(self.lb.transform(labels), dtype=torch.float32)
+        targets = targets.to(self.device, dtype=torch.float32)
         return targets
 
     def forward(self, x):
@@ -94,7 +92,7 @@ class MLPClassificationHead(nn.Module):
         y_label = inputs['y_label']
 
         targets = torch.argmax(self.transform_labels(y_label), dim=-1)
-        predictions = outputs
+        predictions = outputs.to(torch.float32)  # Ensure predictions are float32
         
         return self.loss_function(predictions, targets)
     
@@ -123,9 +121,8 @@ class OldClassificationHead(nn.Module):
         self.lb.fit(labels)
     
     def transform_labels(self, labels):
-        targets = torch.tensor(self.lb.transform(labels))
-        targets = targets.float()
-        targets = targets.to(self.device)
+        targets = torch.tensor(self.lb.transform(labels), dtype=torch.float32)
+        targets = targets.to(self.device, dtype=torch.float32)
         return targets
 
     def forward(self, x):
@@ -135,6 +132,6 @@ class OldClassificationHead(nn.Module):
         y_label = inputs['y_label']
 
         targets = torch.argmax(self.transform_labels(y_label), dim=-1)
-        predictions = outputs
+        predictions = outputs.to(torch.float32)  # Ensure predictions are float32
         
         return self.loss_function(predictions, targets)

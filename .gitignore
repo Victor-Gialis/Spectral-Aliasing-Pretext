@@ -22,10 +22,13 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+pip-log.txt
+pip-delete-this-directory.txt
 
 # Virtual Environment
 .venv/
 .env
+.env.local
 
 # IDE
 .vscode/
@@ -33,10 +36,13 @@ wheels/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
+.jupyter/
+*.ipynb_checkpoints
 
 # Datasets (too large)
 /data/raw/
@@ -52,19 +58,47 @@ wheels/
 /checkpoint/
 *.pth
 *.pt
+*.pth.tar
+*.tar.gz
 
 # Weights & Biases
 /wandb/
 *.wandb
 
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
 # System
 .DS_Store
 .AppleDouble
 .LSOverride
-*.sublime-project
-*.sublime-workspace
 
 # Local development
 .tmp/
 temp/
 *.bak
+*.tmp
+
+# OS
+Thumbs.db
+.directory
+
+# Python development
+*.pot
+*.mo
+dist
+*.egg-info/
+site-packages/
+.vscode/settings.json

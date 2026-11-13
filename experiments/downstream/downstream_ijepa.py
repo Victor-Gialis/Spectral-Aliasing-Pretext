@@ -14,6 +14,29 @@ from models.backbone.registry import get_backbone
 from models.ssl.registry import get_pretrained_backbone
 from models.ssl.ijepa import IJEPAModel
 
+def load_backbone_args_from_checkpoint(checkpoint_path):
+    """
+    Load backbone arguments from checkpoint file.
+    Args:
+        checkpoint_path (str): Path to the checkpoint directory
+    Returns:
+        dict: Backbone arguments
+    """
+    checkpoint_file = os.path.join(checkpoint_path, 'checkpoints', 'last.pt')
+    checkpoint = torch.load(checkpoint_file, weights_only=False)
+    
+    if 'backbone_args' in checkpoint:
+        return checkpoint['backbone_args']
+    else:
+        # Return default args if not found
+        return {
+            'patch_size': 16,
+            'hidden_dim': 128,
+            'n_layers': 4,
+            'heads': 8,
+            'dropout': 0.2565
+        }
+
 def main(args):
     """
     Run ONE data-scarcity downstream experiment.
@@ -29,6 +52,28 @@ def main(args):
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # Determine checkpoint path first
+    if args.backbone_checkpoint_path is None:
+        # Get last checkpoint for IJEPA pretrained on CWRU
+        checkpoints = os.listdir("results/pretrain/IJEPAModel/CWRUDataset")
+        checkpoints.sort()
+
+        print("Available checkpoints:", checkpoints)
+        checkpoint_path = os.path.join("results/pretrain/IJEPAModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
+
+    else:
+        # Get checkpoint from specified path
+        checkpoint_path = args.backbone_checkpoint_path
+
+    # Load backbone arguments from checkpoint
+    backbone_args = load_backbone_args_from_checkpoint(checkpoint_path)
+    
+    # Create backbone with loaded arguments
+    backbone_random = ViT1DEncoder(**backbone_args)
+    ssl_mode = IJEPAModel(backbone=backbone_random
+                        , args_ssl=SimpleNamespace(enc_mask_ratio=1.0, pred_mask_ratio=1.0, momentum=1.0)
+    )
+    
     # Dataloader configuration
     args_dataloader = SimpleNamespace(
         name=args.downstream_dataset,
@@ -37,6 +82,7 @@ def main(args):
         batch_size=args.batch_size,
         data_ratio=args.data_ratio,
         seed=args.seed,
+        use_float16=not args.finetune,  # Disable float16 for finetuning (use float32 instead)
     )
     
     # Split dataloaders
@@ -44,20 +90,18 @@ def main(args):
         split_type=args.split_type,
         args_dataloader=args_dataloader,
     )
-
-    # Backbone
-    backbone_random = ViT1DEncoder()
-    ssl_mode = IJEPAModel(backbone=backbone_random
-                        , args_ssl=SimpleNamespace(enc_mask_ratio=1.0, pred_mask_ratio=1.0, momentum=1.0)
     )
-    
+
+    # Load pretrained SSL model
+    ssl_name = ssl_mode.__class__.__name__ 
+
     if args.backbone_checkpoint_path is None:
         # Get last checkpoint for IJEPAModel pretrained on CWRU
-        checkpoints = os.listdir("results/pretrain/IJEPAModel/CWRUDataset")
+        checkpoints = os.listdir(f"results/pretrain/{ssl_name}/CWRUDataset")
         checkpoints.sort()
 
         print("Available checkpoints:", checkpoints)
-        checkpoint_path = os.path.join("results/pretrain/IJEPAModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
+        checkpoint_path = os.path.join(f"results/pretrain/{ssl_name}/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
     else:
         # Get checkpoint from specified path
         checkpoint_path = args.backbone_checkpoint_path
@@ -109,7 +153,7 @@ def main(args):
     )
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Downstream IJEPA Model")
+    parser = argparse.ArgumentParser(description="Downstream I-JEPA Model")
 
     # Dataloader
     parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST'], help='Name of the dataset to use for pretraining')

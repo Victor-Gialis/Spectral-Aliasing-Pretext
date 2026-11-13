@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from utils.transformer_blocks import Tokeniser, Attention, PreNorm, FeedForward, Residual, PositionalEncoding
 
 class ViT1DEncoder(nn.Module):
-    def __init__(self, patch_size=16, hidden_dim=512, n_layers=3, heads=8, dropout=0.2565, domain="time", normalization=None):
+    def __init__(self, patch_size=16, hidden_dim=None, n_layers=None, heads= None, dropout=0.2565, domain=None, scaling_method=None):
         super().__init__()
         # Encoder hyperparameters
         self.patch_size = patch_size
@@ -13,7 +13,7 @@ class ViT1DEncoder(nn.Module):
         self.heads = heads
         self.dropout = dropout
         self.domain = domain
-        self.normalization = normalization
+        self.scaling_method = scaling_method
 
         # Pretrain dataset Stats
         self.stats = dict()
@@ -31,7 +31,7 @@ class ViT1DEncoder(nn.Module):
         self.encoder_layers = nn.ModuleList([
             nn.Sequential(
                 Residual(PreNorm(hidden_dim, Attention(hidden_dim, n_heads=heads, dropout=dropout))),
-                Residual(PreNorm(hidden_dim, FeedForward(hidden_dim, hidden_dim, dropout=dropout)))
+                Residual(PreNorm(hidden_dim, FeedForward(hidden_dim, dropout=dropout)))
             )
             for _ in range(n_layers)
         ])
@@ -220,7 +220,7 @@ class ViT1DDecoder(nn.Module):
         self.decoder_layers = nn.ModuleList([
             nn.Sequential(
                 Residual(PreNorm(hidden_dim, Attention(hidden_dim, n_heads=heads, dropout=dropout))),
-                Residual(PreNorm(hidden_dim, FeedForward(hidden_dim, hidden_dim, dropout=dropout)))
+                Residual(PreNorm(hidden_dim, FeedForward(hidden_dim, dropout=dropout)))
             )
             for _ in range(n_layers)
         ])

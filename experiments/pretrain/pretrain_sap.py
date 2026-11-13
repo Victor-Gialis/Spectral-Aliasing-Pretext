@@ -19,6 +19,7 @@ def main(args):
              - window_stride (int): Stride of time serie window.
              - batch_size (int): Batch size for datal
              - downstreaming_factor (int): Downstream factor
+             - scaling_method (str): Scaling method (normalization or standardization).
              - model (str): Model to pretrain.
              - learning_rate (float): Learning rate for Adam
              - weight_decay (float): Weight decay for Adam
@@ -34,18 +35,25 @@ def main(args):
         batch_size=args.batch_size,
         downsampling_factor=args.downsampling_factor,
         symetric_spectrum=args.symetric_spectrum,
+        scaling_method=args.scaling_method,
         )
     
     # Set backbone arguments
     args_backbone = SimpleNamespace(
         model="vit1d",
-        domain="frequency", # Use frequency-based learning method
-        normalization="z-score", # Use z-score normalization
+        hidden_dim=args.hidden_dim,
+        n_layers=args.n_layers,
+        heads=args.heads,
+        domain=args.domain, # Use frequency-based learning method
+        scaling_method=args.scaling_method, # Use None for normalization stats
     )
     # Set ssl arguments
     args_ssl = SimpleNamespace(
         method="sap",
         downsampling_factor=args.downsampling_factor,
+        symetric_spectrum=args.symetric_spectrum,
+        loss_domain=args.loss_domain,
+        revin=args.revin,
     )
 
     # Set training arguments
@@ -64,18 +72,32 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Prepare data loaders
-    train_loader, valid_loader, test_loader = dataloader.get_heterogeneous_split_dataloaders(args_dataloader)
+    if len(args.pretrain_dataset) > 1 : # Composite dataset
+        train_loader, valid_loader, test_loader, _ = dataloader.get_multi_dataset_ssl_splits(args_dataloader)
+    else :
+        train_loader, valid_loader, test_loader = dataloader.get_heterogeneous_split_dataloaders(args_dataloader)
 
     # Initialize backbone
-    backbone = get_backbone(args_backbone).to(device)
-    args_ssl.args = vars(backbone._get_arguments())
+    backbone = get_backbone(args_backbone).to(device, dtype=torch.float16)
+    # Force backbone to float16
+    for param in backbone.parameters():
+        param.data = param.data.to(torch.float16)
+    for buf in backbone.buffers():
+        buf.data = buf.data.to(torch.float16)
+    args_ssl.args = vars(backbone._get_arguments()) # Store backbone arguments in args_ssl for later use
 
-    # Compute min-max from X_raw train dataloader
-    stats = dataloader.compute_stats_from_dataloader(train_loader)
-    backbone._loads_stats(stats)
-    
     # Initialize ssl method
-    model = SAPModel(backbone, args_ssl)
+    model = SAPModel(backbone, args_ssl).to(device, dtype=torch.float16)
+    
+    # Force decoder to float16
+    model.decoder = model.decoder.half()
+    model.loss_function = model.loss_function.half()
+    
+    # Force ALL model components to float16
+    for param in model.parameters():
+        param.data = param.data.to(torch.float16)
+    for buf in model.buffers():
+        buf.data = buf.data.to(torch.float16)
 
     # Define optimizer and scheduler    
     optimizer = torch.optim.AdamW(model.parameters(), lr= args_training .learning_rate, weight_decay=args_training.weight_decay)
@@ -101,34 +123,34 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pretrain SAP Model")
     
     # Dataloader
-    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI'], help='Name of the dataset to use for pretraining')
+    parser.add_argument('--pretrain_dataset', 
+                    type=str, 
+                    nargs='+', 
+                    required=True, 
+                    help='Name of the dataset(s) to use for pretraining')
     
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--window_size', type=int, default=2048, help='Window size for data segments')
     parser.add_argument('--window_stride', type=int, default=256, help='Stride for windowing data segments')
 
+    parser.add_argument('--domain', type=str, default='frequency', choices=['frequency','time'], help='Domain for the backbone model (time or frequency).')
+    parser.add_argument('--scaling_method', type=str, default='standardization', choices=[None,'normalization','standardization'], help='Scaling method for the dataset')
+
     # Training
-    parser.add_argument('--learning_rate', type=float, default=0.0003695, help='Learning rate for optimizer')
+    parser.add_argument('--learning_rate', type=float, default=0.0003695, help='Learning rattimee for optimizer')
     parser.add_argument('--weight_decay', type=float, default=1.1133e-5, help='Weight decay for optimizer')
     parser.add_argument('--epochs', type=int, required=True, help='Number of training epochs')
 
-    # # SAP specific
+    # Backbone specific
+    parser.add_argument('--hidden_dim', type=int, default=128, help='Hidden dimension for the backbone model')
+    parser.add_argument('--n_layers', type=int, default=4, help='Number of layers for the backbone model')
+    parser.add_argument('--heads', type=int, default=4, help='Number of attention heads for the backbone model')
+
+    # SAP specific
     parser.add_argument('--downsampling_factor', required=True, help='Downsampling factor')
     parser.add_argument('--symetric_spectrum', action='store_true', help='Whether to use symetric spectrum for SAP')
+    parser.add_argument('--loss_domain', type=str, default='linear', choices=['linear','log'], help='Loss domain for SAP (linear or log)')
+    parser.add_argument('--revin', action='store_true', help='Whether to use Reversible Instance Normalization (ReVIN) for SAP')
     
     args = parser.parse_args()
-
-    # # Debugging arguments
-    # args = SimpleNamespace(
-    #     pretrain_dataset="CWRU",
-    #     downstream_dataset="CWRU",
-    #     batch_size=256,
-    #     window_size=2048,
-    #     window_stride=256,
-    #     learning_rate=0.0003695,
-    #     weight_decay=1.1133e-5,
-    #     epochs=5,
-    #     downsampling_factor=None,
-    # )
-
     main(args)

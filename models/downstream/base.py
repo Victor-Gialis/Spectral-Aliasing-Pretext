@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from dataset.transform import normalization
-from models.backbone.vit1d import ViT1DDecoder
+from models.backbone.vit1d import ViT1DEncoder
 from models.backbone.cnn import DilatedCNNEncoder, CNNEncoder
 
 class DownstreamModel(nn.Module):
@@ -21,53 +21,69 @@ class DownstreamModel(nn.Module):
             for p in self.backbone.parameters():
                 p.requires_grad = False
 
+        # Adjust dtypes based on whether we're finetuning
+        if freeze_backbone:
+            # Linear probing: keep backbone in float16 (for memory efficiency)
+            self.backbone = self.backbone.to(torch.float16)
+        else:
+            # Finetuning: convert backbone to float32 (for numerical stability)
+            self.backbone = self.backbone.to(torch.float32)
+        
+        # Head is always float32 (for numerical stability in loss computation)
+        self.head = self.head.to(torch.float32)
+        
+        # Log dtypes
+        backbone_dtype = next(self.backbone.parameters()).dtype
+        head_dtype = next(self.head.parameters()).dtype
+        print(f"Model scaling method: {self.backbone.scaling_method}")  
+        print(f"Backbone dtype: {backbone_dtype}, Head dtype: {head_dtype}")
+
     def forward(self, batch, get_attention=False):
         """
         batch: dict (standardisé par ton dataloader)
         """
         if self.backbone.domain == "time":
-            x_raw = batch['x_raw']  # (batch_size, seq_length, num_channels)
-            
+            if self.backbone.scaling_method is not None:
+                x = batch['x_raw_scaled']  # (batch_size, seq_length, num_channels)
+            else:
+                x = batch['x_raw']
+
         elif self.backbone.domain == "frequency":
-            x_raw = batch['X_raw']  # (batch_size, seq_length, num_channels)
-
-        # If stats is not empty dict, normalize the input data using global z-log normalization
-        if self.backbone.stats and self.backbone.normalization is not None:
-
-            if self.backbone.normalization == "z-score-log":
-                # Z-score followed by log transformation
-                x_norm = normalization.global_z_log_normalization(x=x_raw, stats=self.backbone.stats)
-            
-            elif self.backbone.normalization == "z-score":
-                # Z-score normalization only
-                x_norm = normalization.global_z_score_normalization(x=x_raw, stats=self.backbone.stats)
-            
-            else :
-                raise ValueError(f"Normalization method {self.backbone.normalization} not recognized. Please use 'z-score-log' or 'z-score'.")
+            if self.backbone.scaling_method is not None:
+                x = batch['X_raw_scaled']  # (batch_size, seq_length, num_channels)
+            else:
+                x = batch['X_raw']  # (batch_size, seq_length, num_channels)
 
         else:
-            x_norm = x_raw  # If stats is empty, use raw data without normalization
+            raise ValueError(f"Backbone domain {self.backbone.domain} not recognized. Please use 'time' or 'frequency'.")
+
+        # Get head dtype for conversion after backbone
+        head_dtype = next(self.head.parameters()).dtype
 
         if isinstance(self.backbone, DilatedCNNEncoder)or isinstance(self.backbone, CNNEncoder):
             # If the backbone is a CNN-based encoder, we can directly use the output features for classification.
             # x_norm: (batch_size, seq_length, num_channels)
-            features = self.backbone(x_norm)
+            features = self.backbone(x)
             aggregated = features.mean(dim=1)  # (batch_size, hidden_dim)
+            # Convert to head dtype for computation
+            aggregated = aggregated.to(head_dtype)
             outputs = self.head(aggregated)
 
             return outputs
 
-        elif isinstance(self.backbone, ViT1DDecoder):
+        elif isinstance(self.backbone, ViT1DEncoder):
             # If the backbone is a ViT-based encoder, we can use the class token for classification.
             # x_norm: (batch_size, seq_length, num_channels)
             # Pass through the ViT encoder
             # The ViT encoder will return the class token and the attention scores
-            features = self.backbone(x_norm)
+            features = self.backbone(x)
             cls_token = features[:,0]
+            # Convert to head dtype for computation
+            cls_token = cls_token.to(head_dtype)
             outputs = self.head(cls_token)
 
             if get_attention:
-                attention_scores = self.backbone.get_attention_scores(x_norm)
+                attention_scores = self.backbone.get_attention_scores(x)
                 return outputs, attention_scores
 
             else:

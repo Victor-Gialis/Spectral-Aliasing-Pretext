@@ -13,7 +13,22 @@ from models.backbone.vit1d import ViT1DEncoder
 from models.backbone.registry import get_backbone
 from models.ssl.registry import get_pretrained_backbone
 from models.ssl.sap import SAPModel
-
+def load_backbone_args_from_checkpoint(checkpoint_path=None):
+    """
+    Load backbone arguments from checkpoint file.
+    Args:
+        checkpoint_path (str): Path to the checkpoint directory (optional for random backbone)
+    Returns:
+        dict: Backbone arguments
+    """
+    # Return default args for random backbone
+    return {
+        'patch_size': 16,
+        'hidden_dim': 128,
+        'n_layers': 4,
+        'heads': 8,
+        'dropout': 0.2565
+    }
 def main(args):
     """
     Run ONE data-scarcity downstream experiment.
@@ -52,8 +67,11 @@ def main(args):
     # Load pretrain train loader
     pretrain_loader, _, _ = dataloader.get_heterogeneous_split_dataloaders(pretrain_args_dataloader) # Get train loader only
 
+    # Load backbone arguments (use defaults for random backbone)
+    backbone_args = load_backbone_args_from_checkpoint()
+    
     # Backbone - random init
-    backbone_random = ViT1DEncoder()
+    backbone_random = ViT1DEncoder(**backbone_args)
 
     # Compute stats from X_raw train dataloader
     stats = dataloader.compute_stats_from_dataloader(pretrain_loader)

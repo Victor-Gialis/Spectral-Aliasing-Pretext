@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import pandas as pd
 
 from dataset.transform import normalization
 
@@ -22,17 +23,24 @@ class SAPModel(BaseSSLModel):
 
         # Downsampling factor for SAP
         self.downsample_factor = args_ssl.downsampling_factor if hasattr(args_ssl, 'downsampling_factor') else 1
+        self.symetric_spectrum = args_ssl.symetric_spectrum if hasattr(args_ssl, 'symetric_spectrum') else None
 
-        # Create decoder
-        self.decoder = ViT1DDecoder()
+        # Create decoder (force float32)
+        self.decoder = ViT1DDecoder(hidden_dim=backbone.hidden_dim).float()
         
         # Mask token for padding when token count mismatch
         hidden_dim = backbone.hidden_dim if hasattr(backbone, 'hidden_dim') else 512
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
+        self.register_buffer('mask_token', torch.zeros(1, 1, hidden_dim, dtype=torch.float32))
         
-        # Loss function
-        self.loss_function = torch.nn.MSELoss()
+        # Loss function (force float32)
+        self.loss_function = torch.nn.MSELoss().float()
+        
+        ### Parameters for SAP
+        self.loss_domain = args_ssl.loss_domain if hasattr(args_ssl, 'loss_domain') else 'linear'  # Default to linear domain
+        self.revin = args_ssl.revin if hasattr(args_ssl, 'revin') else True  # Default to Reversible Instance Normalization (ReVIN)
 
+        print(f"SAPModel initialized with downsample_factor={self.downsample_factor}, symetric_spectrum={self.symetric_spectrum}, loss_domain={self.loss_domain}, revin={self.revin}")
+        
         # Initialize weights
         self._initialize_weights()
     
@@ -80,13 +88,10 @@ class SAPModel(BaseSSLModel):
             dict: Output dictionary with 'prediction' key.
         """
         x_raw = batch['X_raw'] # get raw spectre without fold
-        x_fold = batch['X_folded'] # get folded spectrum in input
-        
-        # Normalization
-        x_norm = normalization.global_z_log_normalization(x=x_fold, stats=self.backbone.stats)
-        
+        x_fold_scaled = batch['X_folded_scaled'] # get standardized folded spectre
+                
         # Forward pass through encoder
-        embedded_tokens = self.backbone(x_norm)
+        embedded_tokens = self.backbone(x_fold_scaled)
         
         # Pad with mask tokens if necessary
         # x_raw shape: (batch_size, seq_length) -> target tokens = seq_length / patch_size
@@ -97,16 +102,34 @@ class SAPModel(BaseSSLModel):
         
         # Decoder forward pass
         x_pred_norm = self.decoder(embedded_tokens)
-        
-        # Unnormalize
-        x_pred = normalization.global_z_log_unnormalization(x_norm=x_pred_norm, stats=self.backbone.stats)
 
-        # Ensure non-negative outputs
-        x_pred = super().non_negative_output(x_pred)
+        # RevIN (Reversible Instance Normalization)
+        if self.revin:
+
+            if self.backbone.scaling_method == 'normalization':
+                x_pred = self.unnormalize(batch, x_pred_norm)
+
+            elif self.backbone.scaling_method == 'standardization':
+                x_pred = self.unstandardize(batch, x_pred_norm)
+
+            # Ensure non-negative outputs
+            x_pred = super().non_negative_output(x_pred)
+
+        else:
+            x_pred = x_pred_norm
 
         return {"prediction": x_pred}
     
     def compute_loss(self, outputs, inputs):
         targets = inputs['X_raw']
         predictions = outputs['prediction']
-        return self.loss_function(predictions, targets)
+        
+        # Calculate MSE in chosen domain
+        if self.loss_domain == 'linear':
+            # Convert from log domain to linear domain
+            targets_linear = torch.expm1(targets)
+            predictions_linear = torch.expm1(predictions)
+            return self.loss_function(predictions_linear, targets_linear)
+        
+        else:  # 'log' domain (default)
+            return self.loss_function(predictions, targets)

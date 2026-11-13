@@ -214,7 +214,7 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
         return
     
     if not isinstance(model.backbone, ViT1DEncoder):
-        return
+        raise ValueError("Backbone must be an instance of ViT1DEncoder to extract attention scores.")
     
     model.eval()
     class_spectra = {}
@@ -230,25 +230,18 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
 
             # Get input data            
             if model.backbone.domain == "time":
-                X_raw = inputs['x_raw']
+                x = inputs['x_raw_scaled']
             
             elif model.backbone.domain == "frequency":
-                X_raw = inputs['X_raw']
+                x = inputs['X_raw_scaled']
 
             else:
                 raise ValueError(f"Unsupported backbone domain: {model.backbone.domain}")
-        
-            # If stats normalise
-            if hasattr(model.backbone, 'stats') and model.backbone.stats is not None:
-                # Normalize (same as in downstream model)
-                x_norm = normalization.global_z_log_normalization(x=X_raw, stats=model.backbone.stats)
-            else:
-                x_norm = X_raw
             
             # Get attention scores from backbone for each sample
             batch_attention_scores = []
-            for i in range(x_norm.shape[0]):
-                single_sample = x_norm[i:i+1]  # (1, n_steps)
+            for i in range(x.shape[0]):
+                single_sample = x[i:i+1]  # (1, n_steps)
                 attn_score = model.backbone.get_attention_scores(single_sample)  # (n_patches,)
                 batch_attention_scores.append(attn_score.cpu().numpy())
             
@@ -260,16 +253,17 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
             class_labels = torch.argmax(targets, dim=1).cpu().numpy()
             
             # Get input spectra
-            X = X_raw.cpu().numpy()  # (batch, n_steps)
+            x = x.cpu().numpy()  # (batch, n_steps)
             
             # Aggregate by class
             for i, class_idx in enumerate(class_labels):
                 class_idx = int(class_idx)
+
                 if class_idx not in class_spectra:
                     class_spectra[class_idx] = []
                     class_attention_scores[class_idx] = []
                 
-                class_spectra[class_idx].append(X[i])
+                class_spectra[class_idx].append(x[i])
                 class_attention_scores[class_idx].append(batch_attention_scores[i])
     
     # Compute mean spectra and attention scores per class
@@ -419,7 +413,7 @@ def evaluate(run_dir, model, test_loader, device, task="classification"):
 
 def log_metrics(run_dir, results_dict):
     global_dir = "results/downstream"
-    filename = "metrics.csv"
+    filename = "downstream_metrics.csv"
 
     run_filepath = os.path.join(run_dir, "log", filename)
     global_filepath = os.path.join(global_dir, filename)
@@ -461,6 +455,7 @@ def train(
     scheduler,
     epochs,
     eval_every_epoch=False,
+    attention_visualization=False,
 ):    
     # Create run directory
     run_dir = create_run_dir(base_dir="results/downstream", args=args)
@@ -486,6 +481,10 @@ def train(
             loss = model.compute_loss(outputs, inputs)
 
             loss.backward()
+            
+            # Gradient clipping to prevent NaN/inf during finetuning
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
             
             train_loss += loss.item()
@@ -536,7 +535,8 @@ def train(
     save_model_checkpoint(model, run_dir, name="last_model.pth")
     
     # Plot attention spectra for each class
-    plot_attention_spectra(run_dir, model, test_loader, device, task=args.task)
+    if attention_visualization:
+        plot_attention_spectra(run_dir, model, test_loader, device, task=args.task)
     
     # Testing phase (only if not already evaluated every epoch)
     if not eval_every_epoch:

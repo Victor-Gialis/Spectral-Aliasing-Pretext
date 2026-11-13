@@ -19,7 +19,7 @@ def reduced_magnitude_spectrum(x):
     # Compute the magnitude spectrum
     reduced_spectrum = torch.abs(fft_result)/n
 
-    return reduced_spectrum[:-1] # Exclude the Nyquist frequency component
+    return torch.log1p(reduced_spectrum[:-1]) # Exclude the Nyquist frequency component
 
 def symetric_spectrum_preparation(spectrum, factor=1, target_size=None):
     """
@@ -51,5 +51,5 @@ def symetric_spectrum_preparation(spectrum, factor=1, target_size=None):
             
         else:
             complete_spectrum = complete_spectrum[..., :target_size]
-    
+
     return complete_spectrum

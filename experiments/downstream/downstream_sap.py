@@ -14,13 +14,35 @@ from models.backbone.registry import get_backbone
 from models.ssl.registry import get_pretrained_backbone
 from models.ssl.sap import SAPModel
 
+def load_backbone_args_from_checkpoint(checkpoint_path):
+    """
+    Load backbone arguments from checkpoint file.
+    Args:
+        checkpoint_path (str): Path to the checkpoint directory
+    Returns:
+        dict: Backbone arguments
+    """
+    checkpoint_file = os.path.join(checkpoint_path, 'checkpoints', 'last.pt')
+    checkpoint = torch.load(checkpoint_file, weights_only=False)
+    
+    if 'backbone_args' in checkpoint:
+        return checkpoint['backbone_args']
+    else:
+        # Return default args if not found
+        return {
+            'patch_size': 16,
+            'hidden_dim': 128,
+            'n_layers': 4,
+            'heads': 8,
+            'dropout': 0.2565
+        }
+
 def main(args):
     """
     Run ONE data-scarcity downstream experiment.
     Args:
         args (object): Arguments for the experiment.
     """
-
     # Set seed for reproducibility
     torch.manual_seed(42)
     np.random.seed(42)
@@ -29,28 +51,7 @@ def main(args):
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Dataloader configuration
-    args_dataloader = SimpleNamespace(
-        name=args.downstream_dataset,
-        window_size=args.window_size,
-        window_stride=args.window_stride,
-        batch_size=args.batch_size,
-        data_ratio=args.data_ratio,
-        seed=args.seed,
-    )
-    
-    # Split dataloaders
-    train_loader, valid_loader, test_loader, labels, dataset = split_data_factory.split_dataloader(
-        split_type=args.split_type,
-        args_dataloader=args_dataloader,
-    )
-
-    # Backbone
-    backbone_random = ViT1DEncoder()
-    ssl_mode = SAPModel(backbone=backbone_random,
-                        args_ssl=dict()
-                        )
-    
+    # Determine checkpoint path first
     if args.backbone_checkpoint_path is None:
         # Get last checkpoint for SAP pretrained on CWRU
         checkpoints = os.listdir("results/pretrain/SAPModel/CWRUDataset")
@@ -64,11 +65,41 @@ def main(args):
         # Get checkpoint from specified path
         checkpoint_path = args.backbone_checkpoint_path
 
+    # Load backbone arguments from checkpoint
+    backbone_args = load_backbone_args_from_checkpoint(checkpoint_path)
+    
+    # Create backbone with loaded arguments
+    backbone_random = ViT1DEncoder(**backbone_args)
+    ssl_mode = SAPModel(backbone=backbone_random,
+                        args_ssl=dict()
+
+                        )
+
     # checkpoint_path = "results/pretrain/SAPModel/CWRUDataset/20260123_165739"
     ssl_model = load_model_checkpoint(ssl_mode, checkpoint_path)
     args.downsample_factor = ssl_model.downsample_factor
 
+    # Get the backbone from the pretrained SSL model
     backbone = ssl_model.backbone
+
+    # Dataloader configuration
+    args_dataloader = SimpleNamespace(
+        name=args.downstream_dataset,
+        window_size=args.window_size,
+        window_stride=args.window_stride,
+        scaling_method=backbone.scaling_method,
+        batch_size=args.batch_size,
+        data_ratio=args.data_ratio,
+        seed=args.seed,
+        use_float16=not args.finetune,  # Disable float16 for finetuning (use float32 instead)
+        # fault_filter=['inner', 'outer', 'normal','ball'],
+    )
+
+    # Split dataloaders
+    train_loader, valid_loader, test_loader, labels, dataset = split_data_factory.split_dataloader(
+        split_type=args.split_type,
+        args_dataloader=args_dataloader,
+    )
 
     # Downstream model
     model = get_downstream_model(
@@ -110,8 +141,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Downstream SAP Model")
 
     # Dataloader
-    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST'], help='Name of the dataset to use for pretraining')
-    parser.add_argument('--downstream_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST'], help='Name of the dataset to use for downstream task')
+    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST','ConcatDataset'], help='Name of the dataset to use for pretraining')
+    parser.add_argument('--downstream_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST','PADERBORN'], help='Name of the dataset to use for downstream task')
 
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--window_size', type=int, default=2048, help='Window size for data segments')
@@ -126,7 +157,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, required=True, help='Number of training epochs')
 
     # Backbone
-    parser.add_argument('--head_type', type=str, required=True, choices=["linear", "nonlinear"], help='Type of head to use for downstream model (linear or nonlinear)')
+    parser.add_argument('--head_type', type=str, required=True, choices=["linear", "non-linear"], help='Type of head to use for downstream model (linear or nonlinear)')
     parser.add_argument('--finetune', action='store_true', help='Whether to finetune the backbone during downstream training')
     parser.add_argument('--task', type=str, required=True, choices=["classification", "regression"], help='Type of downstream task (classification or regression)')
     parser.add_argument('--seed', type=int, required=True, help='Random seed for reproducibility')
@@ -137,25 +168,3 @@ if __name__ == "__main__":
 
     # Run experiment
     main(args)
-    
-    # # Debug example
-    # for data_ratio in [1.0]:
-    #     for fin in [True, False]:
-    #         for seed in range(1):
-    #             args = SimpleNamespace(
-    #                 backbone_init="sap",  # "random" | "sap" | "mae"
-    #                 pretrain_dataset="CWRU",
-    #                 downstream_dataset="CWRU",
-    #                 data_ratio=data_ratio,
-    #                 head_type="linear",
-    #                 finetune=fin,
-    #                 task="classification",
-    #                 seed=seed,
-    #                 epochs=50,
-    #                 batch_size=64,
-    #                 learning_rate=0.0003695,
-    #                 weight_decay=1.1133e-5,
-    #                 window_size=2048,
-    #                 window_stride=256,
-    #             )
-    #             main(args)

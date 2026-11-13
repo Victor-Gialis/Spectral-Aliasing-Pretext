@@ -10,10 +10,10 @@ from models.backbone.registry import get_backbone
 
 def main(args):
     """
-    Pretrain IJEPA model for self-supervised learning on time series data.
+    Pretrain I-JEPA model for self-supervised learning on time series data.
     Args:
        args (argparse): Arguments for the
-          pretrain IJEPA model.
+          pretrain I-JEPA model.
              - dataset (str): Dataset to pretrain.
              - window_size (int): Size of time serie window.
              - window_stride (int): Stride of time serie window.
@@ -31,12 +31,16 @@ def main(args):
         window_size=args.window_size,
         window_stride=args.window_stride,   
         batch_size=args.batch_size,
+        scaling_method=args.scaling_method,
         )
     
     # Set backbone arguments
     args_backbone = SimpleNamespace(
         model="vit1d",
+        domain=args.domain, # Use frequency-based learning method
+        scaling_method=args.scaling_method, # Use scaling method
     )
+    
     # Set ssl arguments
     args_ssl = SimpleNamespace(
         method="ijepa",
@@ -67,9 +71,9 @@ def main(args):
     backbone = get_backbone(args_backbone).to(device)
     args_ssl.args = vars(backbone._get_arguments())
 
-    # Compute min-max from X_raw train dataloader
-    stats = dataloader.compute_stats_from_dataloader(train_loader)
-    backbone._loads_stats(stats)
+    # # Compute min-max from X_raw train dataloader
+    # stats = dataloader.compute_stats_from_dataloader(train_loader)
+    # backbone._loads_stats(stats)
 
     # Initialize IJEPA model
     model = IJEPAModel(backbone, args_ssl).to(device)
@@ -95,13 +99,16 @@ def main(args):
     )
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pretrain IJEPA model for self-supervised learning on time series data.")
+    parser = argparse.ArgumentParser(description="Pretrain I-JEPA model for self-supervised learning on time series data.")
     
     # Dataloader
     parser.add_argument("--pretrain_dataset", type=str, default="CWRU", help="Dataset to pretrain.")
     parser.add_argument("--window_size", type=int, default=2048, help="Size of time series window.")
     parser.add_argument("--window_stride", type=int, default=512, help="Stride of time series window.")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for dataloader.")
+
+    parser.add_argument('--domain', type=str, default='frequency', choices=['frequency','time'], help='Domain for the backbone model (time or frequency).')
+    parser.add_argument('--scaling_method', type=str, default='standardization', choices=[None,'normalization','standardization'], help='Scaling method for the dataset')
 
     # Training
     parser.add_argument("--learning_rate", type=float, default=1e-3, help="Learning rate for optimizer.")

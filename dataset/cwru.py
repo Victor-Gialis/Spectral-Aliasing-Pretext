@@ -4,7 +4,16 @@ import numpy as np
 from dataset.base import BaseDataset, Sample
 
 class CWRUDataset(BaseDataset):    
-    def __init__(self, root_dir=None, source='FE', fault_filter=None, speed_filter=None, window_size=2048, window_stride=256, downsampling_factor=None, symetric_spectrum=True):
+    def __init__(self, 
+                 root_dir=None, 
+                 fault_filter=None, 
+                 speed_filter=None, 
+                 window_size=None, 
+                 window_stride=None, 
+                 scaling_method=None,
+                 downsampling_factor=None, 
+                 symetric_spectrum=True,
+                 use_float16=None):
         """
         Args:
             source (str): Source des données, peut être 'DE', 'FE' ou 'BA'.
@@ -23,8 +32,10 @@ class CWRUDataset(BaseDataset):
                          speed_filter=speed_filter,
                          window_size=window_size, 
                          window_stride=window_stride,
+                         scaling_method=scaling_method,
                          downsampling_factor=downsampling_factor,
                          symetric_spectrum=symetric_spectrum,
+                         use_float16=use_float16,
                          )
     
     def __delattr__(self, name):
@@ -80,7 +91,13 @@ class CWRUDataset(BaseDataset):
                                 # On ne garde que les fichiers qui correspondent au filtre de défaut et à la source
                                 if self.speed_filter is None or speed in self.speed_filter:
                                     # On ne garde que les fichiers qui correspondent au filtre de vitesse
+                                    
+                                    # Add severity information to the label
                                     label = label + '_' + diameter 
+
+                                    # Use only the label without severity information for the sample
+                                    # label = label
+
                                     self.samples.append(Sample(filepath=npz_path,
                                                         label=label,
                                                         metadata={'speed': speed, 

@@ -15,17 +15,20 @@ def main(args):
         window_size=args.window_size,
         window_stride=args.window_stride,
         batch_size=args.batch_size,
+        scaling_method=args.scaling_method,
         )
     # Set backbone arguments
     args_backbone = SimpleNamespace(
-        model="vit1d",
-        domain="frequency", # Use frequency-based learning method
-        normalization="z-score", # Use z-score normalization
+        model="vit1d", 
+        domain=args.domain, # Use frequency-based learning method
+        scaling_method=args.scaling_method, # Use scaling method
     )
     # Set ssl arguments
     args_ssl = SimpleNamespace(
         method="mae",
         mask_ratio=args.mask_ratio,
+        loss_domain=args.loss_domain,
+        revin=args.revin,
     )
     
     # Set training arguments
@@ -44,15 +47,18 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Prepare data loaders
-    train_loader, valid_loader, test_loader = dataloader.get_heterogeneous_split_dataloaders(args_dataloader)
+    if len(args.pretrain_dataset) > 1 :
+        train_loader, valid_loader, test_loader, dataset = dataloader.get_multi_dataset_ssl_splits(args_dataloader)
+    else :
+        train_loader, valid_loader, test_loader = dataloader.get_heterogeneous_split_dataloaders(args_dataloader)
 
     # Initialize backbone
     backbone = get_backbone(args_backbone).to(device)
     args_ssl.args = vars(backbone._get_arguments())
 
-    # Compute min-max from X_raw train dataloader
-    stats = dataloader.compute_stats_from_dataloader(train_loader)
-    backbone._loads_stats(stats)
+    # # Compute min-max from X_raw train dataloader
+    # stats = dataloader.compute_stats_from_dataloader(train_loader)
+    # backbone._loads_stats(stats)
 
     # Initialize ssl method
     model = MAEModel(backbone, args_ssl)
@@ -81,11 +87,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pretrain MAE Model")
     
     # Dataloader
-    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI'], help='Name of the dataset to use for pretraining')
-    
+    parser.add_argument('--pretrain_dataset', 
+                        type=str, 
+                        nargs='+', 
+                        required=True, 
+                        help='Name of the dataset(s) to use for pretraining')
+
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--window_size', type=int, default=2048, help='Window size for data segments')
     parser.add_argument('--window_stride', type=int, default=256, help='Stride for windowing data segments')
+
+    parser.add_argument('--domain', type=str, default='frequency', choices=['frequency','time'], help='Domain for the backbone model (time or frequency).')
+    parser.add_argument('--scaling_method', type=str, default='standardization', choices=[None,'normalization','standardization'], help='Scaling method for the dataset')
 
     # Training
     parser.add_argument('--learning_rate', type=float, default=0.0003695, help='Learning rate for optimizer')
@@ -94,6 +107,8 @@ if __name__ == "__main__":
 
     # MAE specific
     parser.add_argument('--mask_ratio', type=float, required=True, help='Masking ratio for MAE')
+    parser.add_argument('--loss_domain', type=str, default='log', choices=['linear','log'], help='Loss domain for MAE (linear or log)')
+    parser.add_argument('--revin', action='store_true', help='Whether to use Reversible Instance Normalization (ReVIN) for MAE')
     
     args = parser.parse_args()
     main(args)

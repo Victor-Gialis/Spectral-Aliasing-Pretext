@@ -10,16 +10,18 @@ else:
 os.environ["PYTHONPATH"] = pythonpath
 
 # Variables for pretrain experiment
-pretrain_dataset = "CWRU"  # ["CWRU", "LASPI"]
+pretrain_dataset = ["PHM07","PHM09","PHM12","CWRU","LASPI","HUST","PADERBORN"] 
 window_size = 2048
-window_stride = 256
+window_stride = 2048
 
-batch_size = 128
+batch_size = 256
 learning_rate = 3.0e-4
 weight_decay = 6.7e-6
 epochs = 50
 
-mask_ratio = 0.80
+mask_ratio = 0.25
+loss_domain = "log"  # ["linear" or "log"]
+revin = True  # [True or False]
 
 # =========================
 # Pretraining experiments
@@ -27,16 +29,20 @@ mask_ratio = 0.80
 print(f"Starting MAE pretraining experiments...")
 
 pretrain_cmd = (
-    f"python experiments/pretrain_mae.py "
-    f"--pretrain_dataset {pretrain_dataset} "
+    f"python experiments/pretrain/pretrain_mae.py "
+    f"--pretrain_dataset {' '.join(pretrain_dataset)} "
     f"--batch_size {batch_size} "
     f"--window_size {window_size} "
     f"--window_stride {window_stride} "
     f"--mask_ratio {mask_ratio} "
+    f"--loss_domain {loss_domain} "
     f"--epochs {epochs} "
     f"--learning_rate {learning_rate} "
     f"--weight_decay {weight_decay} "
 )
+
+if revin:
+    pretrain_cmd += " --revin"
 
 print(f"Running: {pretrain_cmd}")
 exit_code = os.system(pretrain_cmd)

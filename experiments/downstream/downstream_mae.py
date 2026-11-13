@@ -14,6 +14,29 @@ from models.backbone.registry import get_backbone
 from models.ssl.registry import get_pretrained_backbone
 from models.ssl.mae import MAEModel
 
+def load_backbone_args_from_checkpoint(checkpoint_path):
+    """
+    Load backbone arguments from checkpoint file.
+    Args:
+        checkpoint_path (str): Path to the checkpoint directory
+    Returns:
+        dict: Backbone arguments
+    """
+    checkpoint_file = os.path.join(checkpoint_path, 'checkpoints', 'last.pt')
+    checkpoint = torch.load(checkpoint_file, weights_only=False)
+    
+    if 'backbone_args' in checkpoint:
+        return checkpoint['backbone_args']
+    else:
+        # Return default args if not found
+        return {
+            'patch_size': 16,
+            'hidden_dim': 128,
+            'n_layers': 4,
+            'heads': 8,
+            'dropout': 0.2565
+        }
+
 def main(args):
     """
     Run ONE data-scarcity downstream experiment.
@@ -29,28 +52,7 @@ def main(args):
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Dataloader configuration
-    args_dataloader = SimpleNamespace(
-        name=args.downstream_dataset,
-        window_size=args.window_size,
-        window_stride=args.window_stride,
-        batch_size=args.batch_size,
-        data_ratio=args.data_ratio,
-        seed=args.seed,
-    )
-    
-    # Split dataloaders
-    train_loader, valid_loader, test_loader, labels, dataset = split_data_factory.split_dataloader(
-        split_type=args.split_type,
-        args_dataloader=args_dataloader,
-    )
-
-    # Backbone
-    backbone_random = ViT1DEncoder()
-    ssl_mode = MAEModel(backbone=backbone_random
-                        , args_ssl=SimpleNamespace(mask_ratio=1.0)
-    )
-    
+    # Determine checkpoint path first
     if args.backbone_checkpoint_path is None:
         # Get last checkpoint for MAE pretrained on CWRU
         checkpoints = os.listdir("results/pretrain/MAEModel/CWRUDataset")
@@ -62,6 +64,32 @@ def main(args):
     else:
         # Get checkpoint from specified path
         checkpoint_path = args.backbone_checkpoint_path
+
+    # Load backbone arguments from checkpoint
+    backbone_args = load_backbone_args_from_checkpoint(checkpoint_path)
+    
+    # Create backbone with loaded arguments
+    backbone_random = ViT1DEncoder(**backbone_args)
+    ssl_mode = MAEModel(backbone=backbone_random
+                        , args_ssl=SimpleNamespace(mask_ratio=1.0)
+    )
+    
+    # Dataloader configuration
+    args_dataloader = SimpleNamespace(
+        name=args.downstream_dataset,
+        window_size=args.window_size,
+        window_stride=args.window_stride,
+        batch_size=args.batch_size,
+        data_ratio=args.data_ratio,
+        seed=args.seed,
+        use_float16=not args.finetune,  # Disable float16 for finetuning (use float32 instead)
+    )
+    
+    # Split dataloaders
+    train_loader, valid_loader, test_loader, labels, dataset = split_data_factory.split_dataloader(
+        split_type=args.split_type,
+        args_dataloader=args_dataloader,
+    )
 
     # checkpoint_path = "results/pretrain/MAEModel/CWRUDataset/20260123_162146"
     ssl_model = load_model_checkpoint(ssl_mode, checkpoint_path)
@@ -109,7 +137,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Downstream MAE Model")
 
     # Dataloader
-    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST'], help='Name of the dataset to use for pretraining')
+    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST','ConcatDataset'], help='Name of the dataset to use for pretraining')
     parser.add_argument('--downstream_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST'], help='Name of the dataset to use for downstream task')
 
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')

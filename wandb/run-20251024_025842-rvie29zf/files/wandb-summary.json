@@ -1,1 +1,0 @@
-{"best_valid_loss":2.1571954127058895e-06,"_runtime":0,"hidden_dim":512,"lr":0.0004258207946809151,"_step":0,"patch_size":32,"batch_size":64,"_timestamp":1.7612675235069332e+09,"weight_decay":1.4611417285915227e-06,"num_heads":4,"normalization":"z","_wandb":{"runtime":0},"num_layers":5,"dropout":0.3100058072943211}

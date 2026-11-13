@@ -1,5 +1,0 @@
-/home/ngrotus/CWRU_MAE/scripts/pretrain_optimisation.py:121: FutureWarning: suggest_loguniform has been deprecated in v3.0.0. This feature will be removed in v6.0.0. See https://github.com/optuna/optuna/releases/tag/v3.0.0. Use suggest_float(..., log=True) instead.
-  lr = trial.suggest_loguniform("lr", 1e-5, 1e-3)
-/home/ngrotus/CWRU_MAE/scripts/pretrain_optimisation.py:122: FutureWarning: suggest_loguniform has been deprecated in v3.0.0. This feature will be removed in v6.0.0. See https://github.com/optuna/optuna/releases/tag/v3.0.0. Use suggest_float(..., log=True) instead.
-  weight_decay = trial.suggest_loguniform("weight_decay", 1e-6, 1e-3)
-                                                                                                                                                          

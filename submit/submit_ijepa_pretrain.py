@@ -27,10 +27,10 @@ momentum = 0.97 # Momentum for the target encoder
 # =========================
 # Pretraining experiments
 # =========================
-print(f"Starting IJEPA Pretraining experiments...")
+print(f"Starting I-JEPA Pretraining experiments...")
 
 pretrain_cmd = (
-    f"python experiments/pretrain_ijepa.py "
+    f"python experiments/pretrain/pretrain_ijepa.py "
     f"--pretrain_dataset {pretrain_dataset} "
     f"--batch_size {batch_size} "
     f"--window_size {window_size} "

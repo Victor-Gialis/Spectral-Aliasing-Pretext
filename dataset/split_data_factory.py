@@ -45,14 +45,22 @@ def split_dataloader(split_type=None,args_dataloader=None):
                 seed=seed,
             )
 
+        elif dataset_name == "PADERBORN":
+            # Speeds: 1000, 1500 and 2000 RPM for PADERBORN
+            train_loader, valid_loader, test_loader, labels, dataset = dataloader.get_speed_stratified_dataloaders(
+                args=args_dataloader,
+                train_val_speeds=[1500],
+                test_speeds=[900],
+                seed=seed,
+            )
+
+        else:
+            raise NotImplementedError(f"Speed stratified sampling not implemented for {dataset_name} yet")
+
     # Split dataloaders - speed-load stratified sampling
     elif split_type == "speed_load_stratified":
 
-        if dataset_name == "CWRU":
-            # CWRU doesn't have load conditions, so speed-load stratified sampling is not applicable
-            raise NotImplementedError("Speed-load stratified sampling not implemented for CWRU yet")
-
-        elif dataset_name == "LASPI":
+        if dataset_name == "LASPI":
             # Loads : 0, 25, 50 and 75 % of full load for LASPI
             # Speeds : 25, 35 and 45 Hz for LASPI
             # Total combinations : 12 (all combinations of 4 loads and 3 speeds) - test on (25Hz, 50% load)
@@ -64,18 +72,33 @@ def split_dataloader(split_type=None,args_dataloader=None):
                 test_combinations=[(25, 50)],
                 seed=seed,
             )
+
+        elif dataset_name == "PADERBORN":
+            # Loads : 0, 25, 50 and 75 % of full load for PADERBORN
+            # Speeds : 1000, 1500 and 2000 RPM for PADERBORN
+            # Total combinations : 12 (all combinations of 4 loads and 3 speeds) - test on (1000RPM, 50% load)
+            train_loader, valid_loader, test_loader, labels, dataset = dataloader.get_speed_load_stratified_dataloaders(
+                args=args_dataloader, 
+                train_val_combinations=[(1000, 0), (1000, 25), (1000, 75),
+                                        (1500, 0), (1500, 25), (1500, 50), (1500, 75),
+                                        (2000, 0), (2000, 25), (2000, 50), (2000, 75),],
+                test_combinations=[(1000, 50)],
+                seed=seed,
+            )
+
+        else:
+            raise NotImplementedError(f"Speed-load stratified sampling not implemented for {dataset_name} yet")
     
     elif split_type == "sample_stratified":
-
-        if dataset_name == "CWRU":   
-            # Not realease yet
-            raise NotImplementedError("Sample stratified sampling not implemented for CWRU yet")
         
-        elif dataset_name == "LASPI":
+        if dataset_name == "LASPI":
             # Mixed speed train/val, test on fixed speeds and load conditions, but only 1 load condition per speed to avoid overfitting to load conditions
             train_loader, valid_loader, test_loader, labels, dataset = dataloader.get_laspi_acquisition_split_dataloaders(
                 args=args_dataloader,
                 seed=seed,
             )
+
+        else :
+            raise NotImplementedError(f"Sample stratified sampling not implemented for {dataset_name} yet")
 
     return train_loader, valid_loader, test_loader, labels, dataset

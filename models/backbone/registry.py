@@ -14,12 +14,12 @@ def get_backbone(args: object):
 
     backbone_name = args.model
     backbone_domain = getattr(args, "domain", "time")  # Default to "time" if not specified
-    backbone_normalization = getattr(args, "normalization", None)  # Default to None if not specified
+    backbone_scaling_method = getattr(args, "scaling_method", None)  # Default to None if not specified
 
     if backbone_name not in BACKBONE_REGISTRY:
         raise ValueError(f"Backbone '{backbone_name}' is not registered. Available backbones: {list(BACKBONE_REGISTRY.keys())}")
     else :
-        print(f"Using backbone: {backbone_name} with domain: {backbone_domain} and normalization: {backbone_normalization}")
+        print(f"Using backbone: {backbone_name} with domain: {backbone_domain} and scaling method: {backbone_scaling_method}")
         backbone_class = BACKBONE_REGISTRY[backbone_name]
 
     # Convert args -> dict
@@ -36,8 +36,8 @@ def get_backbone(args: object):
     if "domain" in sig.parameters:
         valid_args["domain"] = backbone_domain
 
-    if "normalization" in sig.parameters:
-        valid_args["normalization"] = backbone_normalization
+    if "scaling_method" in sig.parameters:
+        valid_args["scaling_method"] = backbone_scaling_method
 
     backbone = backbone_class(**valid_args)
 
