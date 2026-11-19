@@ -11,20 +11,23 @@ from tqdm import tqdm
 from datetime import datetime
 from models.backbone.vit1d import ViT1DEncoder
 from models.ssl.mae import MAEModel
+from config.paths import RESULTS_DOWNSTREAM_DIR
 
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.metrics import accuracy_score, f1_score, mean_squared_error, r2_score
 from matplotlib.patches import Rectangle
 from dataset.transform import normalization
 
-def create_run_dir(base_dir="results/downstream", args:object=None):
+def create_run_dir(base_dir=None, args:object=None):
     """
     Docstring for create_run_dir
     
     :param base_dir: Description
     :param args: Description
     :type args: object
-    """ 
+    """
+    if base_dir is None:
+        base_dir = RESULTS_DOWNSTREAM_DIR
     split_type = args.split_type
     pretrain_dataset = args.pretrain_dataset 
     downstream_dataset = args.downstream_dataset

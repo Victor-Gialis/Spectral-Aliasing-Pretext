@@ -16,6 +16,7 @@ from models.ssl.sap import SAPModel
 from models.ssl.ts2vec import TS2VecModel
 from models.ssl.tstcc import TSTCCModel
 from models.ssl.sajepa import SAJEPAModel
+from config.paths import RESULTS_PRETRAIN_DIR
 
 # Utilities for pretraining
 def create_run_dir(method:str, dataset:str)->Path:
@@ -28,7 +29,7 @@ def create_run_dir(method:str, dataset:str)->Path:
         run_dir (Path): Path to the created directory.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = Path("results")/"pretrain"/f"{method}/{dataset}/{timestamp}"
+    run_dir = RESULTS_PRETRAIN_DIR / method / dataset / timestamp
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
 

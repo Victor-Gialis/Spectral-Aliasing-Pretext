@@ -58,34 +58,33 @@ Download datasets and place them in `data/raw/`:
 
 ### 1. Pretrain a Self-Supervised Model
 
-Example: Train a **SAP** (Spectral Aliasing Pretext) model on CWRU dataset:
+Example: Train a **MAE** (Masked Autoencoders) model on CWRU dataset:
 
 ```bash
-python experiments/pretrain/pretrain_sap.py \
-  --pretrain_dataset CWRUDataset \
+python experiments/pretrain/pretrain_mae.py \
+  --pretrain_dataset CWRU \
   --batch_size 256 \
   --epochs 100 \
   --mask_ratio 0.5 \
   --learning_rate 1e-3
 ```
 
-Checkpoint saved to: `results/pretrain/SAPModel/CWRUDataset/[timestamp]/`
+Checkpoint saved to: `results/pretrain/[timestamp]/`
 
 ### 2. Run Downstream Evaluation
 
 Evaluate pretrained model on a downstream task (e.g., fault classification on PADERBORN):
 
 ```bash
-python experiments/downstream/downstream_sap.py \
-  --pretrain_dataset ConcatDataset \
+python experiments/downstream/downstream_mae.py \
+  --pretrain_dataset CWRU \
   --downstream_dataset PADERBORN \
   --data_ratio 0.1 \
-  --split_type speed_stratified \
   --epochs 30 \
   --finetune
 ```
 
-Results saved to: `results/downstream/[split_type]/[config]/[timestamp]/`
+Results saved to: `results/downstream/[timestamp]/`
 
 ### 3. Batch Processing (Multiple Experiments)
 
@@ -112,7 +111,6 @@ The framework implements multiple SSL paradigms with method-specific configurati
 | Method | Description | Status |
 |--------|-------------|--------|
 | **MAE** | Masked Autoencoders | ✅ Implemented |
-| **SAP** | Spectral Aliasing Pretext | ✅ Implemented |
 | **TS2Vec** | Time Series Representation Learning | ✅ Implemented |
 | **TSTCC** | Time Series Contrastive Learning | ✅ Implemented |
 | **iJEPA** | Image Joint Embedding Predictive Architecture | ✅ Implemented |
@@ -166,18 +164,13 @@ Each downstream head:
 Systematic evaluation under limited labeled data with controlled parameters:
 
 **Configurable Parameters:**
-- SSL pretraining method (MAE, SAP, TS2Vec, etc.)
-- Pretraining dataset (CWRU, LASPI, ConcatDataset)
-- Downstream dataset (PADERBORN, LASPI, CWRU, CVRTEST)
+- SSL pretraining method (MAE, TS2Vec, TSTCC, iJEPA, SA-iJEPA)
+- Pretraining dataset (CWRU, LASPI, HUST, PADERBORN, PHM07, PHM09, PHM12, CVRTEST)
+- Downstream dataset (PADERBORN, LASPI, CWRU, CVRTEST, HUST, PHM07, PHM09, PHM12)
 - Labeled data ratio: [0.01, 0.05, 0.1, 0.2, 1.0]
-- Data split strategy:
-  - `independent`: Random train/val/test split
-  - `speed_stratified`: Stratified by operating speed
-  - `speed_load_stratified`: Stratified by speed and load
-  - `sample_stratified`: Stratified by sample index
 - Probing strategy (linear / non-linear)
-- Fine-tuning (frozen backbone vs. fine-tuning)
-- Random seeds: [0, 1, 2, 3, 4] for statistical reliability
+- Fine-tuning (False=frozen backbone vs. True=fine-tuning)
+- Random seeds for reproducibility
 
 **Design Goal:** Fair and reproducible comparisons across SSL methods
 
@@ -366,9 +359,9 @@ Contains: dataset combination, backbone, data ratio, metrics for each experiment
 ### Comparing SSL Methods on Same Dataset
 
 ```bash
-for method in mae sap ts2vec tstcc; do
+for method in mae ts2vec tstcc ijepa sajepa; do
   python experiments/pretrain/pretrain_${method}.py \
-    --pretrain_dataset CWRUDataset \
+    --pretrain_dataset CWRU \
     --epochs 100
 done
 ```
@@ -377,8 +370,8 @@ done
 
 ```bash
 for ratio in 0.01 0.05 0.1 0.2 1.0; do
-  python experiments/downstream/downstream_sap.py \
-    --pretrain_dataset ConcatDataset \
+  python experiments/downstream/downstream_mae.py \
+    --pretrain_dataset CWRU \
     --downstream_dataset PADERBORN \
     --data_ratio $ratio \
     --epochs 30
@@ -389,8 +382,8 @@ done
 
 ```bash
 # Pretrain on CWRU, evaluate on PADERBORN
-python experiments/downstream/downstream_sap.py \
-  --pretrain_dataset CWRUDataset \
+python experiments/downstream/downstream_mae.py \
+  --pretrain_dataset CWRU \
   --downstream_dataset PADERBORN \
   --data_ratio 1.0
 ```
@@ -399,12 +392,12 @@ python experiments/downstream/downstream_sap.py \
 
 ```bash
 # Linear probing (frozen backbone)
-python experiments/downstream/downstream_sap.py \
-  --downstream_dataset PADERBORN \
+python experiments/downstream/downstream_mae.py \
+  --downstream_dataset PADERBORN
   # --finetune NOT set
 
 # Full fine-tuning
-python experiments/downstream/downstream_sap.py \
+python experiments/downstream/downstream_mae.py \
   --downstream_dataset PADERBORN \
   --finetune
 ```
@@ -423,9 +416,9 @@ The framework is designed for large-scale HPC execution on **Jean Zay (IDRIS)**:
 **Submission Example:**
 
 ```bash
-# Launch 1000 experiments via job queue
-python experiments/downstream/downstream_sap.py \
-  --pretrain_dataset ConcatDataset \
+# Launch experiments via job queue
+python experiments/downstream/downstream_mae.py \
+  --pretrain_dataset CWRU \
   --downstream_dataset PADERBORN \
   --data_ratio 0.1 \
   --seed 42
@@ -451,8 +444,8 @@ If you use this code or datasets in your research, please cite:
 
 **BibTeX:**
 ```bibtex
-@software{Grotus2026,
-  author = {Grotus, Victor},
+@software{Gialis2026,
+  author = {Gialis, Victor},
   title = {Self-Supervised Learning for Industrial Condition Monitoring},
   year = {2026},
   url = {https://github.com/yourusername/CWRU_MAE},
@@ -462,7 +455,7 @@ If you use this code or datasets in your research, please cite:
 
 **APA:**
 ```
-Grotus, V. (2026). Self-Supervised Learning for Industrial Condition Monitoring 
+Gialis, V. (2026). Self-Supervised Learning for Industrial Condition Monitoring 
 under Data Scarcity. Retrieved from https://github.com/yourusername/CWRU_MAE
 ```
 
@@ -486,9 +479,8 @@ This project is licensed under the **MIT License** - see [LICENSE](LICENSE) file
 
 ## 📧 Contact & Support
 
-**Author:** Victor Grotus  
-**Email:** victor.grotus@cwru.edu  
-**Position:** PhD Candidate, Industrial Maintenance & Applied Machine Learning
+**Author:** Victor Gialis  
+**Position:** Industrial Maintenance & Applied Machine Learning Research
 
 **For issues & questions:**
 - Open an issue on GitHub
@@ -500,8 +492,8 @@ This project is licensed under the **MIT License** - see [LICENSE](LICENSE) file
 ## 📝 Version History
 
 - **v1.0** (Nov 2026): Initial release
-  - MAE, SAP, TS2Vec, TSTCC, iJEPA, SA-iJEPA implementations
-  - Multi-dataset support (CWRU, LASPI, PADERBORN, PHM series, CVRTEST)
+  - MAE, TS2Vec, TSTCC, iJEPA, SA-iJEPA implementations
+  - Multi-dataset support (CWRU, LASPI, PADERBORN, PHM series, CVRTEST, HUST)
   - Data scarcity evaluation protocol
   - Linear & non-linear probing
 

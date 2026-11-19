@@ -8,6 +8,7 @@ Cet script montre comment:
 4. Afficher les résultats
 """
 import tqdm
+from config.paths import RESULTS_DOWNSTREAM_DIR
 import torch
 import json
 import os
@@ -127,7 +128,7 @@ def get_model_path(split_strategy, pretrain_dataset, downstream_dataset, backbon
         pretrain_dataset = "None"
     
     # Construire le chemin vers le modèle
-    model_path = f"results/downstream/{split_strategy}/{pretrain_dataset}_to_{downstream_dataset}_backbone_{backbone}_head_{head_type}_{finetune_str}/data_ratio_{data_ratio}_epochs_{epochs}_seed_{seed}/best_model.pth"
+    model_path = str(RESULTS_DOWNSTREAM_DIR / split_strategy / f"{pretrain_dataset}_to_{downstream_dataset}_backbone_{backbone}_head_{head_type}_{finetune_str}" / f"data_ratio_{data_ratio}_epochs_{epochs}_seed_{seed}" / "best_model.pth")
     
     # Vérifier que le chemin existe
     if os.path.exists(model_path) :

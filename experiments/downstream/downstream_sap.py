@@ -54,12 +54,9 @@ def main(args):
     # Determine checkpoint path first
     if args.backbone_checkpoint_path is None:
         # Get last checkpoint for SAP pretrained on CWRU
-        checkpoints = os.listdir("results/pretrain/SAPModel/CWRUDataset")
-        checkpoints.sort()
-
-        # print("Available checkpoints:", checkpoints)
-        checkpoint_path = os.path.join("results/pretrain/SAPModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
-        print(f"Using pretrain version: {checkpoints[-1]}")
+        from config.paths import get_latest_pretrain_checkpoint
+        checkpoint_path = get_latest_pretrain_checkpoint("SAPModel", "CWRUDataset")
+        print(f"Using checkpoint: {checkpoint_path}")
     
     else:
         # Get checkpoint from specified path
@@ -141,7 +138,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Downstream SAP Model")
 
     # Dataloader
-    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST','ConcatDataset'], help='Name of the dataset to use for pretraining')
+    parser.add_argument('--pretrain_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST','Concat'], help='Name of the dataset to use for pretraining')
     parser.add_argument('--downstream_dataset', type=str, required=True, choices=['CWRU','LASPI','CVRTEST','PADERBORN'], help='Name of the dataset to use for downstream task')
 
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')

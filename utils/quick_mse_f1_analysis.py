@@ -8,11 +8,12 @@ Usage:
 import pandas as pd
 from pathlib import Path
 from tabulate import tabulate  # pip install tabulate
+from config.paths import RESULTS_ROOT
 
 def quick_analysis():
     """Load and display quick analysis summary."""
     
-    results_file = Path("results/mse_vs_f1_analysis/mse_vs_f1_results.csv")
+    results_file = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_results.csv"
     
     if not results_file.exists():
         print(f"❌ Results file not found: {results_file}")
@@ -85,8 +86,8 @@ def quick_analysis():
     print(tabulate(display_df, headers="keys", tablefmt="grid", showindex=False))
     
     # Output file paths
-    report_file = Path("results/mse_vs_f1_analysis/analysis_report.txt")
-    plots_file = Path("results/mse_vs_f1_analysis/mse_vs_f1_analysis.png")
+    report_file = RESULTS_ROOT / "mse_vs_f1_analysis" / "analysis_report.txt"
+    plots_file = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_analysis.png"
     
     print("\n📁 OUTPUT FILES")
     print("-" * 80)
@@ -113,7 +114,7 @@ if __name__ == "__main__":
         print("Note: For better formatting, install tabulate: pip install tabulate")
         print("Falling back to simple display...\n")
         
-        results_file = Path("results/mse_vs_f1_analysis/mse_vs_f1_results.csv")
+        results_file = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_results.csv"
         if results_file.exists():
             df = pd.read_csv(results_file)
             print(df.to_string())

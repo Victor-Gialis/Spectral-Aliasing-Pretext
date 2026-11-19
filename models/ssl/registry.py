@@ -53,8 +53,9 @@ def get_pretrained_backbone(
     # -------------------------------------------------
     # Locate run directory
     # -------------------------------------------------
+    from config.paths import RESULTS_PRETRAIN_DIR
     base_dir = (
-        Path("results/pretrain")
+        RESULTS_PRETRAIN_DIR
         / ssl_class.__name__
         / dataset_class.__name__
     )

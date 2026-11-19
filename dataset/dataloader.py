@@ -12,23 +12,12 @@ from torch.utils.data import DataLoader, WeightedRandomSampler, Subset
 from sklearn.model_selection import train_test_split
 
 import dataset
+from config.paths import get_dataset_path
 
 # Helper function to determine pin_memory based on GPU availability
 def get_pin_memory():
     """Determine if pin_memory should be True based on GPU availability."""
     return torch.cuda.is_available()
-
-# Mapping dataset names to their root directories
-DATASET_PATHS = {
-    "CWRU": "data/raw/CWRU",
-    "LASPI": "data/raw/LASPI",
-    "CVRTEST": "data/raw/CVR_Test",
-    "HUST": "data/raw/HUST/HUST bearing dataset",
-    "PADERBORN": "data/raw/PADERBORN",
-    "PHM09": "data/raw/PHM09",
-    "PHM12": "data/raw/PHM12",
-    "PHM07": "data/raw/PHM07",
-}
 
 def get_dataset(args:object):
     """
@@ -38,7 +27,7 @@ def get_dataset(args:object):
         **kwargs: Additional keyword arguments to pass to the dataset constructor.
     """
     name = args.name[0] if isinstance(args.name, list) else args.name
-    base_path = DATASET_PATHS[name.upper()]
+    base_path = str(get_dataset_path(name))
 
     module = importlib.import_module(f"dataset.{name.lower()}")
     dataset_class = getattr(module, f"{name.upper()}Dataset")

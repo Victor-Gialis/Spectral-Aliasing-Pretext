@@ -55,11 +55,9 @@ def main(args):
     # Determine checkpoint path first
     if args.backbone_checkpoint_path is None:
         # Get last checkpoint for MAE pretrained on CWRU
-        checkpoints = os.listdir("results/pretrain/MAEModel/CWRUDataset")
-        checkpoints.sort()
-
-        print("Available checkpoints:", checkpoints)
-        checkpoint_path = os.path.join("results/pretrain/MAEModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
+        from config.paths import get_latest_pretrain_checkpoint
+        checkpoint_path = get_latest_pretrain_checkpoint("MAEModel", "CWRUDataset")
+        print(f"Using checkpoint: {checkpoint_path}")
 
     else:
         # Get checkpoint from specified path

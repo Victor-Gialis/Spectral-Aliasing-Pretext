@@ -54,12 +54,10 @@ def main(args):
     )
     
     if args.backbone_checkpoint_path is None:
-        # Get last checkpoint for TS2VecModel pretrained on CWRU
-        checkpoints = os.listdir("results/pretrain/TS2VecModel/CWRUDataset")
-        checkpoints.sort()
-
-        print("Available checkpoints:", checkpoints)
-        checkpoint_path = os.path.join("results/pretrain/TS2VecModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
+        # Get last checkpoint for TSTCCModel pretrained on CWRU
+        from config.paths import get_latest_pretrain_checkpoint
+        checkpoint_path = get_latest_pretrain_checkpoint("TSTCCModel", "CWRUDataset")
+        print(f"Using checkpoint: {checkpoint_path}")
     else:
         # Get checkpoint from specified path
         checkpoint_path = args.backbone_checkpoint_path

@@ -92,7 +92,8 @@ def extract_validation_loss() -> float:
     """
     try:
         # Trouver le répertoire de résultats le plus récent
-        pretrain_dir = Path("results/pretrain")
+        from config.paths import RESULTS_PRETRAIN_DIR
+        pretrain_dir = RESULTS_PRETRAIN_DIR
         if not pretrain_dir.exists():
             return None
         
@@ -174,8 +175,9 @@ def print_results(study: optuna.Study):
 
 def save_results(study: optuna.Study):
     """Sauvegarde les meilleurs hyperparamètres dans un fichier JSON."""
+    from config.paths import RESULTS_ROOT
     
-    output_dir = Path("results/mae_optimization")
+    output_dir = RESULTS_ROOT / "mae_optimization"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     best_trial = study.best_trial

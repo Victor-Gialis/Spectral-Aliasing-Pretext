@@ -174,8 +174,9 @@ def print_results(study: optuna.Study):
 
 def save_results(study: optuna.Study):
     """Sauvegarde les meilleurs hyperparamètres dans un fichier JSON."""
+    from config.paths import RESULTS_ROOT
     
-    output_dir = Path("results/sap_optimization")
+    output_dir = RESULTS_ROOT / "sap_optimization"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     best_trial = study.best_trial

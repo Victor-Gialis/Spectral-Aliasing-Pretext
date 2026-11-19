@@ -55,11 +55,9 @@ def main(args):
     # Determine checkpoint path first
     if args.backbone_checkpoint_path is None:
         # Get last checkpoint for IJEPA pretrained on CWRU
-        checkpoints = os.listdir("results/pretrain/IJEPAModel/CWRUDataset")
-        checkpoints.sort()
-
-        print("Available checkpoints:", checkpoints)
-        checkpoint_path = os.path.join("results/pretrain/IJEPAModel/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
+        from config.paths import get_latest_pretrain_checkpoint
+        checkpoint_path = get_latest_pretrain_checkpoint("IJEPAModel", "CWRUDataset")
+        print(f"Using checkpoint: {checkpoint_path}")
 
     else:
         # Get checkpoint from specified path
@@ -97,11 +95,9 @@ def main(args):
 
     if args.backbone_checkpoint_path is None:
         # Get last checkpoint for IJEPAModel pretrained on CWRU
-        checkpoints = os.listdir(f"results/pretrain/{ssl_name}/CWRUDataset")
-        checkpoints.sort()
-
-        print("Available checkpoints:", checkpoints)
-        checkpoint_path = os.path.join(f"results/pretrain/{ssl_name}/CWRUDataset", checkpoints[-1])  # Get the last checkpoint
+        from config.paths import get_latest_pretrain_checkpoint
+        checkpoint_path = get_latest_pretrain_checkpoint("IJEPAModel", "CWRUDataset")
+        print(f"Using checkpoint: {checkpoint_path}")
     else:
         # Get checkpoint from specified path
         checkpoint_path = args.backbone_checkpoint_path

@@ -21,6 +21,7 @@ from utils.analysis_metrics import (
     rank_configurations,
     print_analysis_summary,
 )
+from config.paths import RESULTS_ROOT
 
 def example_1_basic_loading():
     """Example 1: Load and display basic results."""
@@ -28,7 +29,7 @@ def example_1_basic_loading():
     print("EXAMPLE 1: Basic Loading and Display")
     print("="*70)
     
-    csv_path = Path("results/mse_vs_f1_analysis/mse_vs_f1_results.csv")
+    csv_path = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_results.csv"
     
     if not csv_path.exists():
         print(f"❌ Results file not found: {csv_path}")
@@ -47,7 +48,7 @@ def example_2_statistical_summary():
     print("EXAMPLE 2: Statistical Summary")
     print("="*70)
     
-    csv_path = Path("results/mse_vs_f1_analysis/mse_vs_f1_results.csv")
+    csv_path = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_results.csv"
     
     if not csv_path.exists():
         print(f"❌ Results file not found")
@@ -63,7 +64,7 @@ def example_3_custom_analysis():
     print("EXAMPLE 3: Custom Analysis - Impact of Batch Size")
     print("="*70)
     
-    csv_path = Path("results/mse_vs_f1_analysis/mse_vs_f1_results.csv")
+    csv_path = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_results.csv"
     
     if not csv_path.exists():
         print(f"❌ Results file not found")
@@ -102,7 +103,7 @@ def example_3_custom_analysis():
     axes[1].grid(True, alpha=0.3)
     
     plt.tight_layout()
-    output_path = Path("results/mse_vs_f1_analysis/example_batch_size_impact.png")
+    output_path = RESULTS_ROOT / "mse_vs_f1_analysis" / "example_batch_size_impact.png"
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\n✅ Plot saved to: {output_path}")
     plt.close()
@@ -113,7 +114,7 @@ def example_4_find_pareto_optimal():
     print("EXAMPLE 4: Pareto-Optimal Configurations")
     print("="*70)
     
-    csv_path = Path("results/mse_vs_f1_analysis/mse_vs_f1_results.csv")
+    csv_path = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_results.csv"
     
     if not csv_path.exists():
         print(f"❌ Results file not found")
@@ -172,7 +173,7 @@ def example_4_find_pareto_optimal():
                    xytext=(5, 5), textcoords='offset points', fontsize=9)
     
     plt.tight_layout()
-    output_path = Path("results/mse_vs_f1_analysis/example_pareto_optimal.png")
+    output_path = RESULTS_ROOT / "mse_vs_f1_analysis" / "example_pareto_optimal.png"
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\n✅ Plot saved to: {output_path}")
     plt.close()
@@ -183,7 +184,7 @@ def example_5_efficiency_score():
     print("EXAMPLE 5: Configuration Efficiency Analysis")
     print("="*70)
     
-    csv_path = Path("results/mse_vs_f1_analysis/mse_vs_f1_results.csv")
+    csv_path = RESULTS_ROOT / "mse_vs_f1_analysis" / "mse_vs_f1_results.csv"
     
     if not csv_path.exists():
         print(f"❌ Results file not found")
