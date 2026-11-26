@@ -242,20 +242,27 @@ def plot_attention_spectra(run_dir, model, test_loader, device, task="classifica
                 raise ValueError(f"Unsupported backbone domain: {model.backbone.domain}")
             
             # Get attention scores from backbone for each sample
-            batch_attention_scores = []
-            for i in range(x.shape[0]):
-                single_sample = x[i:i+1]  # (1, n_steps)
-                attn_score = model.backbone.get_attention_scores(single_sample)  # (n_patches,)
-                batch_attention_scores.append(attn_score.cpu().numpy())
-            
-            batch_attention_scores = np.array(batch_attention_scores)  # (batch, n_patches)
-            
+            if getattr(model.backbone, 'frequency_positions', False):
+                _, attention_scores = model(inputs, get_attention=True)
+                batch_attention_scores = attention_scores.cpu().numpy()
+            else:
+                batch_attention_scores = []
+                for i in range(x.shape[0]):
+                    single_sample = x[i:i+1]  # (1, n_steps)
+                    attn_score = model.backbone.get_attention_scores(single_sample)  # (n_patches,)
+                    batch_attention_scores.append(attn_score.cpu().numpy())
+
+                batch_attention_scores = np.array(batch_attention_scores)  # (batch, n_patches)
+
             # Get forward pass for class labels
             outputs = model(inputs)
             targets = model.head.transform_labels(inputs['y_label'])
             class_labels = torch.argmax(targets, dim=1).cpu().numpy()
             
-            # Get input spectra
+            # Use the same input spectra as the frequency-position backbone.
+            if getattr(model.backbone, 'frequency_positions', False):
+                key = 'X_folded_scaled' if model.backbone.scaling_method else 'X_folded'
+                x = inputs[key]
             x = x.cpu().numpy()  # (batch, n_steps)
             
             # Aggregate by class

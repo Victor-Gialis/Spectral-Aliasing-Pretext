@@ -10,7 +10,7 @@ def reduced_magnitude_spectrum(x):
     """
     # psd = torch.abs(torch.fft.rfft(data - torch.mean(data)))/N
 
-    x -= torch.mean(x, dim=-1, keepdim=True)  # Center the signal
+    x = x - x.mean(dim=-1, keepdim=True)  # Preserve overlapping input windows
     n = len(x)
 
     # Compute the Fast Fourier Transform (FFT)

@@ -229,6 +229,10 @@ class BaseDataset(Dataset):
         X_raw_scaled = self._normalize_frequency_tensor(X_raw) if self.scaling_method == 'normalize' else self._standardize_frequency_tensor(X_raw)
         X_fold_scaled = self._normalize_frequency_tensor(X_fold) if self.scaling_method == 'normalize' else self._standardize_frequency_tensor(X_fold)
 
+        sample_rate = (metadata or {}).get('sampling_frequency')
+        if sample_rate is None:
+            sample_rate = getattr(self, 'sampling_frequency', getattr(self, 'sampling_frequencies', 0))
+
         return {# Time domain
                 'x_raw':x_raw,                                                                                                                                      # Raw time series
                 'x_raw_scaled':x_raw_scaled,                  # Standardized time series
@@ -243,6 +247,8 @@ class BaseDataset(Dataset):
                 
                 # Metadata
                 'y_label':y_label,                                              # Label associated with the sample
+                'sample_rate_hz': torch.tensor(sample_rate, dtype=torch.float32),
+                'sampling_stride': torch.tensor(self.downsampling_factor, dtype=torch.long),
                 'metadata':metadata,                                            # Metadata associated with the sample
                 'stats':self.stats,                                             # Dataset statistics
                 'index':idx,                                                    # Index of the sample

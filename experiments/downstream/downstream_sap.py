@@ -91,6 +91,10 @@ def main(args):
         # fault_filter=['inner', 'outer', 'normal','ball'],
     )
 
+    if backbone.frequency_positions:
+        args_dataloader.downsampling_factor = ssl_model.downsample_factor
+        args_dataloader.symetric_spectrum = ssl_model.symetric_spectrum
+
     # Split dataloaders
     train_loader, valid_loader, test_loader, labels, dataset = split_data_factory.split_dataloader(
         split_type=args.split_type,

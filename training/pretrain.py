@@ -141,6 +141,7 @@ def save_model_checkpoint(run_dir:Path, model:nn.Module, name:str="model.pt"):
     if isinstance(model, SAPModel):
         if hasattr(model, 'downsample_factor'):
             checkpoint['downsample_factor'] = model.downsample_factor
+        checkpoint['symetric_spectrum'] = model.symetric_spectrum
 
     # Save additional SSL parameters if IJEPA model
     if isinstance(model, IJEPAModel):
@@ -215,6 +216,8 @@ def load_model_checkpoint(model:nn.Module, checkpoint_path:Path)->nn.Module:
             if isinstance(model, SAPModel):
                 if 'downsample_factor' in checkpoint:
                     model.downsample_factor = checkpoint['downsample_factor']
+                if 'symetric_spectrum' in checkpoint:
+                    model.symetric_spectrum = checkpoint['symetric_spectrum']
 
             # Restore SSL method metadata if IJEPA model
             if isinstance(model, IJEPAModel):

@@ -86,7 +86,7 @@ BOOLEAN_FLAGS = {
     "mae": ["revin"],
     "ijepa": [],
     "sajepa": ["symetric_spectrum"],
-    "sap": ["symetric_spectrum", "revin"],
+    "sap": ["symetric_spectrum", "revin", "frequency_positions"],
     "ts2vec": ["use_cosine_similarity"],
     "tstcc": [],
 }

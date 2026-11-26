@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 from types import SimpleNamespace
+from models.backbone.spectral_position import SpectralPositionalEncoding
 from utils.transformer_blocks import Tokeniser, Attention, PreNorm, FeedForward, Residual, PositionalEncoding
 
 class ViT1DEncoder(nn.Module):
-    def __init__(self, patch_size=16, hidden_dim=None, n_layers=None, heads= None, dropout=0.2565, domain=None, scaling_method=None):
+    def __init__(self, patch_size=16, hidden_dim=None, n_layers=None, heads= None, dropout=0.2565, domain=None, scaling_method=None, frequency_positions=False):
         super().__init__()
         # Encoder hyperparameters
         self.patch_size = patch_size
@@ -14,6 +15,7 @@ class ViT1DEncoder(nn.Module):
         self.dropout = dropout
         self.domain = domain
         self.scaling_method = scaling_method
+        self.frequency_positions = frequency_positions
 
         # Pretrain dataset Stats
         self.stats = dict()
@@ -22,7 +24,8 @@ class ViT1DEncoder(nn.Module):
         self.tokeniser = Tokeniser(patch_size=patch_size, embed_dim=hidden_dim)
 
         # Positional embedding
-        self.positional_embedding = PositionalEncoding(hidden_dim= self.hidden_dim)
+        position_type = SpectralPositionalEncoding if frequency_positions else PositionalEncoding
+        self.positional_embedding = position_type(hidden_dim)
 
         # Class token
         self.cls_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
@@ -59,7 +62,12 @@ class ViT1DEncoder(nn.Module):
     def forward_tokeniser(self, x):
         return self.tokeniser(x)
     
-    def forward_encoder(self, x):
+    def _add_positions(self, tokens, positions):
+        if self.frequency_positions:
+            return self.positional_embedding(tokens, positions)
+        return self.positional_embedding(tokens)
+
+    def forward_encoder(self, x, positions=None):
         """Encodes the input using the encoder."""
         # Extract batch size and number of tokens
         b = x.shape[0]
@@ -67,7 +75,7 @@ class ViT1DEncoder(nn.Module):
         cls_tokens = self.cls_token.expand(b, -1, -1)  # Étendre le cls_token pour correspondre à la taille du batch
         x = torch.cat([cls_tokens, x], dim=1)  # Concaténer le cls_token avec les embeddings des patches
         # Add positional embedding
-        x = self.positional_embedding(x)
+        x = self._add_positions(x, positions)
         # Encoder layers
         for layer in self.encoder_layers:
             x = layer(x)
@@ -75,9 +83,9 @@ class ViT1DEncoder(nn.Module):
         encoded_tokens = self.encoder_output_head(x)
         return encoded_tokens
     
-    def forward(self, x):
+    def forward(self, x, positions=None):
         tokens = self.forward_tokeniser(x)
-        embeded_tokens = self.forward_encoder(tokens)
+        embeded_tokens = self.forward_encoder(tokens, positions)
         return embeded_tokens 
     
     def _loads_stats(self, stats):
@@ -95,9 +103,10 @@ class ViT1DEncoder(nn.Module):
             n_layers = self.n_layers,
             heads = self.heads,
             dropout = self.dropout,
+            frequency_positions = self.frequency_positions,
             )
     
-    def get_attention_scores(self, x, layer_idx=0):
+    def get_attention_scores(self, x, layer_idx=0, positions=None):
         """Returns attention scores from a specific encoder layer.
         
         Args:
@@ -115,7 +124,7 @@ class ViT1DEncoder(nn.Module):
         cls_tokens = self.cls_token.expand(b, -1, -1)
         x = torch.cat([cls_tokens, x], dim=1)
         # Add positional embedding
-        x = self.positional_embedding(x)
+        x = self._add_positions(x, positions)
         
         # Collect all attention modules
         attention_modules = []
@@ -144,7 +153,7 @@ class ViT1DEncoder(nn.Module):
         
         return None
     
-    def get_attention_rollout(self, x):
+    def get_attention_rollout(self, x, positions=None):
         """Returns attention rollout scores from cls token to all patches.
         
         Rollout accumulates attention across all layers to capture how attention
@@ -166,7 +175,7 @@ class ViT1DEncoder(nn.Module):
         cls_tokens = self.cls_token.expand(b, -1, -1)
         x = torch.cat([cls_tokens, x], dim=1)
         # Add positional embedding
-        x = self.positional_embedding(x)
+        x = self._add_positions(x, positions)
         
         # Initialize rollout matrix (identity matrix)
         I = torch.eye(n_tokens).unsqueeze(0).expand(b, -1, -1).to(x.device)
@@ -199,7 +208,7 @@ class ViT1DEncoder(nn.Module):
         attn_scores = rollout[:, 0, 1:]  # cls token -> all patches
         return attn_scores
 class ViT1DDecoder(nn.Module):
-    def __init__(self, patch_size=16, hidden_dim=512, n_layers=3, heads=8, dropout=0.2565):
+    def __init__(self, patch_size=16, hidden_dim=512, n_layers=3, heads=8, dropout=0.2565, frequency_positions=False):
         super().__init__() 
         # Decoder hyperparameters
         self.patch_size = patch_size
@@ -209,7 +218,9 @@ class ViT1DDecoder(nn.Module):
         self.dropout = dropout
 
         # Positional embedding
-        self.positional_embedding = PositionalEncoding(hidden_dim= self.hidden_dim)
+        self.frequency_positions = frequency_positions
+        position_type = SpectralPositionalEncoding if frequency_positions else PositionalEncoding
+        self.positional_embedding = position_type(hidden_dim)
 
         # Decoder parameters
         self.decoder_projection = nn.Sequential(
@@ -246,10 +257,13 @@ class ViT1DDecoder(nn.Module):
                     if sublayer.bias is not None:
                         nn.init.zeros_(sublayer.bias)
     
-    def forward(self, x):
+    def forward(self, x, positions=None):
         """Decodes the encoded tokens using the decoder."""
         # Add positional embedding
-        x = self.positional_embedding(x)
+        if self.frequency_positions:
+            x = self.positional_embedding(x, positions)
+        else:
+            x = self.positional_embedding(x)
         # Decoder projection
         x = self.decoder_projection(x)
         # Decoder layers

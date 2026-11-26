@@ -26,6 +26,7 @@ class CWRUDataset(BaseDataset):
         assert speed_filter is None or isinstance(speed_filter, list), "speed_filter doit être une liste ou None"
         
         self.source = 'FE'
+        self.sampling_frequency = 12000  # Fan-End subset used in the SAP paper
 
         super().__init__(root_dir=root_dir, 
                          fault_filter=fault_filter,

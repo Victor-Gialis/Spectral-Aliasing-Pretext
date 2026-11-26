@@ -27,6 +27,18 @@ def main(args):
     """
     print("The deownsampling factor is : ", args.downsampling_factor, "with type of : ", type(args.downsampling_factor))
 
+    if args.frequency_positions:
+        if args.domain != 'frequency':
+            raise ValueError('--frequency_positions requires --domain frequency')
+        try:
+            factor = int(args.downsampling_factor)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('--frequency_positions requires a fixed integer downsampling factor') from exc
+        if not 1 <= factor <= args.window_size // 2 or args.window_size % 32:
+            raise ValueError('Use a window size divisible by 32 and a factor between 1 and half the window size')
+        if not args.symetric_spectrum and (args.window_size + factor - 1) // factor < 32:
+            raise ValueError('The folded spectrum must contain at least one patch')
+
     # Set dataloader arguments
     args_dataloader = SimpleNamespace(
         name=args.pretrain_dataset,
@@ -41,6 +53,7 @@ def main(args):
     # Set backbone arguments
     args_backbone = SimpleNamespace(
         model="vit1d",
+        frequency_positions=args.frequency_positions,
         hidden_dim=args.hidden_dim,
         n_layers=args.n_layers,
         heads=args.heads,
@@ -133,6 +146,8 @@ if __name__ == "__main__":
 
     # SAP specific
     parser.add_argument('--downsampling_factor', required=True, help='Downsampling factor')
+    parser.add_argument('--frequency_positions', action='store_true',
+                        help='Use physical frequency and bandwidth as positional coordinates')
     parser.add_argument('--symetric_spectrum', action='store_true', help='Whether to use symetric spectrum for SAP')
     parser.add_argument('--loss_domain', type=str, default='linear', choices=['linear','log'], help='Loss domain for SAP (linear or log)')
     parser.add_argument('--revin', action='store_true', help='Whether to use Reversible Instance Normalization (ReVIN) for SAP')

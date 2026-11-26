@@ -4,6 +4,7 @@ import pandas as pd
 
 from dataset.transform import normalization
 
+from models.backbone.spectral_position import spectral_patch_coordinates
 from models.backbone.vit1d import ViT1DDecoder
 from models.ssl.base import BaseSSLModel
 
@@ -26,7 +27,11 @@ class SAPModel(BaseSSLModel):
         self.symetric_spectrum = args_ssl.symetric_spectrum if hasattr(args_ssl, 'symetric_spectrum') else None
 
         # Create decoder (force float32)
-        self.decoder = ViT1DDecoder(hidden_dim=backbone.hidden_dim).float()
+        self.decoder = ViT1DDecoder(
+            patch_size=backbone.patch_size,
+            hidden_dim=backbone.hidden_dim,
+            frequency_positions=getattr(backbone, 'frequency_positions', False),
+        ).float()
         
         # Mask token for padding when token count mismatch
         hidden_dim = backbone.hidden_dim if hasattr(backbone, 'hidden_dim') else 512
@@ -91,7 +96,13 @@ class SAPModel(BaseSSLModel):
         x_fold_scaled = batch['X_folded_scaled'] # get standardized folded spectre
                 
         # Forward pass through encoder
-        embedded_tokens = self.backbone(x_fold_scaled)
+        input_positions = target_positions = None
+        if self.decoder.frequency_positions:
+            input_positions = spectral_patch_coordinates(batch, self.backbone.patch_size, folded=True)
+            target_positions = spectral_patch_coordinates(batch, self.backbone.patch_size, folded=False)
+            embedded_tokens = self.backbone(x_fold_scaled, positions=input_positions)
+        else:
+            embedded_tokens = self.backbone(x_fold_scaled)
         
         # Pad with mask tokens if necessary
         # x_raw shape: (batch_size, seq_length) -> target tokens = seq_length / patch_size
@@ -101,7 +112,7 @@ class SAPModel(BaseSSLModel):
         embedded_tokens = self._pad_embedded_tokens(embedded_tokens, target_num_tokens)
         
         # Decoder forward pass
-        x_pred_norm = self.decoder(embedded_tokens)
+        x_pred_norm = self.decoder(embedded_tokens, positions=target_positions)
 
         # RevIN (Reversible Instance Normalization)
         if self.revin:

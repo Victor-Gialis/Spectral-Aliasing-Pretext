@@ -12,7 +12,8 @@ class CVRTESTDataset(BaseDataset):
                  window_size=2048, 
                  window_stride=256, 
                  downsampling_factor=None, 
-                 scaling_method=None):
+                 scaling_method=None,
+                 symetric_spectrum=True):
         """
         Dataset pour CVR_Test avec données temporelles multivariées.
         
@@ -48,6 +49,7 @@ class CVRTESTDataset(BaseDataset):
                          window_size=window_size, 
                          window_stride=window_stride,
                          scaling_method=scaling_method,
+                         symetric_spectrum=symetric_spectrum,
                          downsampling_factor=downsampling_factor
                          )
     
