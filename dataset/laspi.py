@@ -14,7 +14,7 @@ class LASPIDataset(BaseDataset):
                  scaling_method=None,
                  downsampling_factor=None, 
                  symetric_spectrum=True,
-                 use_float16=None):
+                 ):
         """
         Args:
             transform (callable, optional): Transformation à appliquer aux données.
@@ -27,7 +27,7 @@ class LASPIDataset(BaseDataset):
                          scaling_method=scaling_method,
                          downsampling_factor=downsampling_factor,
                          symetric_spectrum=symetric_spectrum, # LASPI dataset has non symetric spectrum
-                         use_float16=use_float16,
+
                          )
         
         # Fréquences d'échantillonnage pour chaque condition de fonctionnement

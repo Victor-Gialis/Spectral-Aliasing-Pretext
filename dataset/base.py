@@ -32,7 +32,7 @@ class BaseDataset(Dataset):
                  scaling_method=None,
                  downsampling_factor=None,
                  symetric_spectrum=True,
-                 use_float16=None):
+                 ):
         """
         Args:
             root_dir (str): Répertoire racine contenant les données.
@@ -42,7 +42,6 @@ class BaseDataset(Dataset):
             window_stride (int, optional): Pas de la fenêtre pour découper les samples. Si None, pas de découpage.
             downsampling_factor (int, optional): Facteur de sous échantillonnage. Si None, pas de sous échantillonnage.
             symetric_spectrum (bool, optional): Indique si le spectre doit être symétrique. Par défaut True.
-            use_float16 (bool, optional): Si True, convertit les tenseurs en float16 pour économiser la mémoire. Par défaut True.
         """
         assert os.path.isdir(root_dir), f"Le répertoire {root_dir} n'existe pas ou n'est pas un répertoire."
         assert window_size is None or isinstance(window_size, int) and window_size > 0, "window_size doit être un entier positif."
@@ -57,7 +56,6 @@ class BaseDataset(Dataset):
         self.scaling_method = scaling_method
         self.downsampling_factor = downsampling_factor # Downsampling factor
         self.symetric_spectrum = symetric_spectrum
-        self.use_float16 = use_float16
 
         self.samples = []
         self.windows = []
@@ -223,7 +221,6 @@ class BaseDataset(Dataset):
         if self.symetric_spectrum:
             X_fold = spectrum.symetric_spectrum_preparation(X_fold, factor=self.downsampling_factor, target_size=X_raw.shape[-1])
 
- 
         # Time domain
         x_raw_scaled = self._normalize_time_tensor(x_raw) if self.scaling_method == 'normalize' else self._standardize_time_tensor(x_raw)
         x_fold_scaled = self._normalize_time_tensor(x_fold) if self.scaling_method == 'normalize' else self._standardize_time_tensor(x_fold)
@@ -231,17 +228,6 @@ class BaseDataset(Dataset):
         # Frequency domain
         X_raw_scaled = self._normalize_frequency_tensor(X_raw) if self.scaling_method == 'normalize' else self._standardize_frequency_tensor(X_raw)
         X_fold_scaled = self._normalize_frequency_tensor(X_fold) if self.scaling_method == 'normalize' else self._standardize_frequency_tensor(X_fold)
-
-        # Convert to float16 for memory efficiency (if use_float16 is True)
-        if self.use_float16:
-            x_raw = x_raw.to(torch.float16)
-            x_raw_scaled = x_raw_scaled.to(torch.float16)
-            x_fold = x_fold.to(torch.float16)
-            x_fold_scaled = x_fold_scaled.to(torch.float16)
-            X_raw = X_raw.to(torch.float16)
-            X_raw_scaled = X_raw_scaled.to(torch.float16)
-            X_fold = X_fold.to(torch.float16)
-            X_fold_scaled = X_fold_scaled.to(torch.float16)
 
         return {# Time domain
                 'x_raw':x_raw,                                                                                                                                      # Raw time series

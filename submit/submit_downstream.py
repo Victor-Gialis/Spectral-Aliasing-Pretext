@@ -13,14 +13,14 @@ os.environ["PYTHONPATH"] = pythonpath
 
 # Common parameters (default values)
 COMMON_PARAMS = {
-    "downstream_dataset": "PADERBORN",
+    "downstream_dataset": "LASPI",
     "data_ratios": [1.0],
-    "finetune_options": [False, True],
+    "finetune_options": [False],
     "head_type": "linear",
-    "batch_size": 64,
+    "batch_size": 256,
     "window_size": 2048,
     "window_stride": 2048,
-    "learning_rate": 1e-4,
+    "learning_rate": 1e-2,
     "weight_decay": 1e-4,
     "epochs": 50,
     "task": "classification",
@@ -38,8 +38,8 @@ BACKBONE_CONFIGS = {
         "pretrain_dataset": "Concat",
     },
     "sap": {
-        "checkpoint_path": "results/pretrain/SAPModel/ConcatDataset/20261116_164823",
-        "pretrain_dataset": "Concat",
+        "checkpoint_path": "results/pretrain/SAPModel/ConcatDataset/20261120_205709",
+        "pretrain_dataset": "Concat"
     },
     "sajepa": {
         "checkpoint_path": "results/pretrain/SAJEPAModel/CWRUDataset/20261105_105419",

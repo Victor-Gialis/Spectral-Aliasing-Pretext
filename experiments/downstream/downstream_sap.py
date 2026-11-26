@@ -88,7 +88,6 @@ def main(args):
         batch_size=args.batch_size,
         data_ratio=args.data_ratio,
         seed=args.seed,
-        use_float16=not args.finetune,  # Disable float16 for finetuning (use float32 instead)
         # fault_filter=['inner', 'outer', 'normal','ball'],
     )
 

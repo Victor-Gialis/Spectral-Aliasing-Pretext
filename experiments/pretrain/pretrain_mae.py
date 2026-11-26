@@ -20,6 +20,9 @@ def main(args):
     # Set backbone arguments
     args_backbone = SimpleNamespace(
         model="vit1d", 
+        hidden_dim=args.hidden_dim,
+        n_layers=args.n_layers,
+        heads=args.heads,
         domain=args.domain, # Use frequency-based learning method
         scaling_method=args.scaling_method, # Use scaling method
     )
@@ -104,6 +107,11 @@ if __name__ == "__main__":
     parser.add_argument('--learning_rate', type=float, default=0.0003695, help='Learning rate for optimizer')
     parser.add_argument('--weight_decay', type=float, default=1.1133e-5, help='Weight decay for optimizer')
     parser.add_argument('--epochs', type=int, required=True, help='Number of training epochs')
+
+    # Backbone specific
+    parser.add_argument('--hidden_dim', type=int, default=128, help='Hidden dimension for the backbone model')
+    parser.add_argument('--n_layers', type=int, default=4, help='Number of layers for the backbone model')
+    parser.add_argument('--heads', type=int, default=4, help='Number of attention heads for the backbone model')
 
     # MAE specific
     parser.add_argument('--mask_ratio', type=float, required=True, help='Masking ratio for MAE')

@@ -15,10 +15,10 @@ os.environ["PYTHONPATH"] = pythonpath
 COMMON_PARAMS = {
     "pretrain_dataset": ["PHM07", "PHM09", "PHM12", "CWRU", "LASPI", "HUST", "PADERBORN"],
     "window_size": 2048,
-    "window_stride": 2048,
+    "window_stride": 256,
     "batch_size": 256,
-    "learning_rate": 3.0e-4,
-    "weight_decay": 6.7e-6,
+    "learning_rate": 8.3e-4,
+    "weight_decay": 3.6e-06,
     "epochs": 50,
 }
 
@@ -55,7 +55,7 @@ METHOD_SPECIFIC_PARAMS = {
         "heads": 8,
         "downsampling_factor": 2,
         "symetric_spectrum": True,
-        "loss_domain": "log",
+        "loss_domain": "linear",
         "revin": True,
     },
     "ts2vec": {

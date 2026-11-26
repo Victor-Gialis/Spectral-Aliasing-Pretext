@@ -253,23 +253,18 @@ def load_model_checkpoint(model:nn.Module, checkpoint_path:Path)->nn.Module:
     
     return model
 
-def move_batch_to_device(batch, device:torch.device, target_dtype:torch.dtype=torch.float16):
+def move_batch_to_device(batch, device:torch.device):
     """
-    Move batch data to the specified device and convert to float16 (reduced precision for faster training).
+    Move batch data to the specified device.
     Args:
         batch (dict): Batch data containing tensors.
         device (torch.device): Target device.
-        target_dtype (torch.dtype): Target data type (ignored, always float16).
     Returns:
-        dict: Batch data on the target device with float32 dtype.
+        dict: Batch data on the target device.
     """
     for k, v in batch.items():
         if torch.is_tensor(v):
-            # Always convert to float32 for consistency
-            if v.is_floating_point():
-                batch[k] = v.to(device, dtype=torch.float32, non_blocking=True)
-            else:
-                batch[k] = v.to(device, non_blocking=True)
+            batch[k] = v.to(device, non_blocking=True)
     return batch
 
 def evaluate(run_dir:Path,

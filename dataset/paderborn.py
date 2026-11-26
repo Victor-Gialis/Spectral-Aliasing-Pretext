@@ -15,7 +15,7 @@ class PADERBORNDataset(BaseDataset):
                  scaling_method=None,
                  downsampling_factor=None, 
                  symetric_spectrum=True,
-                 use_float16=None):
+                 ):
         """
         Args:
             source (str): Source des données, peut être 'DE', 'FE' ou 'BA'.
@@ -45,7 +45,7 @@ class PADERBORNDataset(BaseDataset):
                          scaling_method=scaling_method,
                          downsampling_factor=downsampling_factor,
                          symetric_spectrum=symetric_spectrum,
-                         use_float16=use_float16,
+
                          )
     
     def __delattr__(self, name):

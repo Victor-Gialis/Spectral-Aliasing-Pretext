@@ -20,23 +20,12 @@ class DownstreamModel(nn.Module):
         if freeze_backbone:
             for p in self.backbone.parameters():
                 p.requires_grad = False
-
-        # Adjust dtypes based on whether we're finetuning
-        if freeze_backbone:
-            # Linear probing: keep backbone in float16 (for memory efficiency)
-            self.backbone = self.backbone.to(torch.float16)
-        else:
-            # Finetuning: convert backbone to float32 (for numerical stability)
-            self.backbone = self.backbone.to(torch.float32)
-        
-        # Head is always float32 (for numerical stability in loss computation)
-        self.head = self.head.to(torch.float32)
         
         # Log dtypes
         backbone_dtype = next(self.backbone.parameters()).dtype
         head_dtype = next(self.head.parameters()).dtype
-        print(f"Model scaling method: {self.backbone.scaling_method}")  
-        print(f"Backbone dtype: {backbone_dtype}, Head dtype: {head_dtype}")
+        print(f"\n✓Model scaling method: {self.backbone.scaling_method}")  
+        print(f"\n✓Backbone dtype: {backbone_dtype}, Head dtype: {head_dtype}")
 
     def forward(self, batch, get_attention=False):
         """
@@ -44,15 +33,19 @@ class DownstreamModel(nn.Module):
         """
         if self.backbone.domain == "time":
             if self.backbone.scaling_method is not None:
-                x = batch['x_raw_scaled']  # (batch_size, seq_length, num_channels)
+                # x = batch['x_raw_scaled']  # (batch_size, seq_length, num_channels)
+                x = batch['x_folded_scaled']  # (batch_size, seq_length, num_channels)
             else:
-                x = batch['x_raw']
+                # x = batch['x_raw']
+                x = batch['x_folded']  # (batch_size, seq_length, num_channels)
 
         elif self.backbone.domain == "frequency":
             if self.backbone.scaling_method is not None:
-                x = batch['X_raw_scaled']  # (batch_size, seq_length, num_channels)
+                # x = batch['X_raw_scaled']  # (batch_size, seq_length, num_channels)
+                x = batch['X_folded_scaled']  # (batch_size, seq_length, num_channels)
             else:
-                x = batch['X_raw']  # (batch_size, seq_length, num_channels)
+                # x = batch['X_raw']  # (batch_size, seq_length, num_channels)
+                x = batch['X_folded']  # (batch_size, seq_length, num_channels)
 
         else:
             raise ValueError(f"Backbone domain {self.backbone.domain} not recognized. Please use 'time' or 'frequency'.")

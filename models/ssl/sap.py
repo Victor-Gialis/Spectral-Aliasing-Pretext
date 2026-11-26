@@ -39,7 +39,7 @@ class SAPModel(BaseSSLModel):
         self.loss_domain = args_ssl.loss_domain if hasattr(args_ssl, 'loss_domain') else 'linear'  # Default to linear domain
         self.revin = args_ssl.revin if hasattr(args_ssl, 'revin') else True  # Default to Reversible Instance Normalization (ReVIN)
 
-        print(f"SAPModel initialized with downsample_factor={self.downsample_factor}, symetric_spectrum={self.symetric_spectrum}, loss_domain={self.loss_domain}, revin={self.revin}")
+        # print(f"SAPModel initialized with downsample_factor={self.downsample_factor}, symetric_spectrum={self.symetric_spectrum}, loss_domain={self.loss_domain}, revin={self.revin}")
         
         # Initialize weights
         self._initialize_weights()

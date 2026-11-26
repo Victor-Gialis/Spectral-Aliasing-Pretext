@@ -78,7 +78,7 @@ class CVRTESTDataset(BaseDataset):
 
         # S'assurer que les données sont des tensors
         if isinstance(inputs, np.ndarray):
-            inputs = torch.tensor(inputs, dtype=torch.float16)
+            inputs = torch.tensor(inputs, dtype=torch.float32)
             print(f"✓ Inputs convertis en torch.Tensor: shape {inputs.shape}, dtype {inputs.dtype}")
         if isinstance(outputs, np.ndarray):
             outputs = torch.tensor(outputs, dtype=torch.long)

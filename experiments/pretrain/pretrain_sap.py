@@ -78,26 +78,11 @@ def main(args):
         train_loader, valid_loader, test_loader = dataloader.get_heterogeneous_split_dataloaders(args_dataloader)
 
     # Initialize backbone
-    backbone = get_backbone(args_backbone).to(device, dtype=torch.float16)
-    # Force backbone to float16
-    for param in backbone.parameters():
-        param.data = param.data.to(torch.float16)
-    for buf in backbone.buffers():
-        buf.data = buf.data.to(torch.float16)
+    backbone = get_backbone(args_backbone).to(device)
     args_ssl.args = vars(backbone._get_arguments()) # Store backbone arguments in args_ssl for later use
 
     # Initialize ssl method
-    model = SAPModel(backbone, args_ssl).to(device, dtype=torch.float16)
-    
-    # Force decoder to float16
-    model.decoder = model.decoder.half()
-    model.loss_function = model.loss_function.half()
-    
-    # Force ALL model components to float16
-    for param in model.parameters():
-        param.data = param.data.to(torch.float16)
-    for buf in model.buffers():
-        buf.data = buf.data.to(torch.float16)
+    model = SAPModel(backbone, args_ssl).to(device)
 
     # Define optimizer and scheduler    
     optimizer = torch.optim.AdamW(model.parameters(), lr= args_training .learning_rate, weight_decay=args_training.weight_decay)
