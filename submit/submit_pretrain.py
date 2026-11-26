@@ -13,10 +13,11 @@ os.environ["PYTHONPATH"] = pythonpath
 
 # Common parameters (default values)
 COMMON_PARAMS = {
-    "pretrain_dataset": ["PHM07", "PHM09", "PHM12", "CWRU", "LASPI", "HUST", "PADERBORN"],
+    # "pretrain_dataset": ["PHM07", "PHM09", "PHM12", "CWRU", "LASPI", "HUST", "PADERBORN"],
+    "pretrain_dataset":["CWRU"],
     "window_size": 2048,
     "window_stride": 256,
-    "batch_size": 256,
+    "batch_size": 32,
     "learning_rate": 8.3e-4,
     "weight_decay": 3.6e-06,
     "epochs": 50,
@@ -51,7 +52,7 @@ METHOD_SPECIFIC_PARAMS = {
         "learning_rate": 8.3e-4,
         "weight_decay": 3.6e-06,
         "hidden_dim": 512,
-        "n_layers": 8,
+        "n_layers": 3,
         "heads": 8,
         "downsampling_factor": 2,
         "symetric_spectrum": True,

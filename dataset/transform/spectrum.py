@@ -10,11 +10,11 @@ def reduced_magnitude_spectrum(x):
     """
     # psd = torch.abs(torch.fft.rfft(data - torch.mean(data)))/N
 
-    x -= torch.mean(x, dim=-1, keepdim=True)  # Center the signal
-    n = len(x)
+    x_centered = x - torch.mean(x, dim=-1, keepdim=True)  # Center the signal
+    n = len(x_centered)
 
     # Compute the Fast Fourier Transform (FFT)
-    fft_result = torch.fft.rfft(x)
+    fft_result = torch.fft.rfft(x_centered)
     
     # Compute the magnitude spectrum
     reduced_spectrum = torch.abs(fft_result)/n
